@@ -1,0 +1,254 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  
+  /* PathFinder Pro Brand Colors */
+  --pathfinder-primary: #5B4FE5;
+  --pathfinder-primary-light: #7B6FF7;
+  --pathfinder-primary-dark: #4338CA;
+  --pathfinder-primary-surface: #F0EFFF;
+  
+  /* Transport Mode Colors */
+  --pathfinder-driving: #3B82F6;
+  --pathfinder-walking: #10B981;
+  --pathfinder-transit: #F59E0B;
+  --pathfinder-cycling: #8B5CF6;
+  
+  /* Semantic Colors */
+  --pathfinder-success: #22C55E;
+  --pathfinder-warning: #F59E0B;
+  --pathfinder-error: #EF4444;
+  --pathfinder-info: #0EA5E9;
+  
+  /* Neutral Colors */
+  --pathfinder-dark: #0F172A;
+  --pathfinder-gray-900: #1E293B;
+  --pathfinder-gray-700: #334155;
+  --pathfinder-gray-500: #64748B;
+  --pathfinder-gray-300: #CBD5E1;
+  --pathfinder-gray-100: #F1F5F9;
+  --pathfinder-light: #F8FAFC;
+  --pathfinder-white: #FFFFFF;
+  
+  /* Map Overlay Colors */
+  --pathfinder-route-active: #5B4FE5;
+  --pathfinder-route-alternative: #94A3B8;
+  --pathfinder-traffic-heavy: #DC2626;
+  --pathfinder-traffic-moderate: #F59E0B;
+  --pathfinder-traffic-light: #22C55E;
+  
+  /* System Colors using PathFinder palette */
+  --background: var(--pathfinder-white);
+  --foreground: var(--pathfinder-gray-900);
+  --card: var(--pathfinder-white);
+  --card-foreground: var(--pathfinder-gray-900);
+  --popover: var(--pathfinder-white);
+  --popover-foreground: var(--pathfinder-gray-900);
+  --primary: var(--pathfinder-primary);
+  --primary-foreground: var(--pathfinder-white);
+  --secondary: var(--pathfinder-gray-100);
+  --secondary-foreground: var(--pathfinder-gray-900);
+  --muted: var(--pathfinder-gray-100);
+  --muted-foreground: var(--pathfinder-gray-500);
+  --accent: var(--pathfinder-primary-surface);
+  --accent-foreground: var(--pathfinder-primary);
+  --destructive: var(--pathfinder-error);
+  --destructive-foreground: var(--pathfinder-white);
+  --border: var(--pathfinder-gray-300);
+  --input: transparent;
+  --input-background: var(--pathfinder-gray-100);
+  --switch-background: var(--pathfinder-gray-300);
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: var(--pathfinder-primary);
+  --chart-1: var(--pathfinder-primary);
+  --chart-2: var(--pathfinder-driving);
+  --chart-3: var(--pathfinder-walking);
+  --chart-4: var(--pathfinder-transit);
+  --chart-5: var(--pathfinder-cycling);
+  --radius: 0.75rem;
+  --sidebar: var(--pathfinder-light);
+  --sidebar-foreground: var(--pathfinder-gray-900);
+  --sidebar-primary: var(--pathfinder-primary);
+  --sidebar-primary-foreground: var(--pathfinder-white);
+  --sidebar-accent: var(--pathfinder-gray-100);
+  --sidebar-accent-foreground: var(--pathfinder-gray-700);
+  --sidebar-border: var(--pathfinder-gray-300);
+  --sidebar-ring: var(--pathfinder-primary);
+}
+
+.dark {
+  /* Dark mode using PathFinder colors */
+  --background: var(--pathfinder-dark);
+  --foreground: var(--pathfinder-light);
+  --card: var(--pathfinder-gray-900);
+  --card-foreground: var(--pathfinder-light);
+  --popover: var(--pathfinder-gray-900);
+  --popover-foreground: var(--pathfinder-light);
+  --primary: var(--pathfinder-primary-light);
+  --primary-foreground: var(--pathfinder-dark);
+  --secondary: var(--pathfinder-gray-700);
+  --secondary-foreground: var(--pathfinder-light);
+  --muted: var(--pathfinder-gray-700);
+  --muted-foreground: var(--pathfinder-gray-300);
+  --accent: var(--pathfinder-gray-700);
+  --accent-foreground: var(--pathfinder-primary-light);
+  --destructive: var(--pathfinder-error);
+  --destructive-foreground: var(--pathfinder-white);
+  --border: var(--pathfinder-gray-700);
+  --input: var(--pathfinder-gray-700);
+  --ring: var(--pathfinder-primary-light);
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: var(--pathfinder-primary-light);
+  --chart-2: var(--pathfinder-driving);
+  --chart-3: var(--pathfinder-walking);
+  --chart-4: var(--pathfinder-transit);
+  --chart-5: var(--pathfinder-cycling);
+  --sidebar: var(--pathfinder-gray-900);
+  --sidebar-foreground: var(--pathfinder-light);
+  --sidebar-primary: var(--pathfinder-primary-light);
+  --sidebar-primary-foreground: var(--pathfinder-dark);
+  --sidebar-accent: var(--pathfinder-gray-700);
+  --sidebar-accent-foreground: var(--pathfinder-light);
+  --sidebar-border: var(--pathfinder-gray-700);
+  --sidebar-ring: var(--pathfinder-primary-light);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/**
+ * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
+ */
+@layer base {
+  :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) {
+    h1 {
+      font-size: var(--text-2xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h2 {
+      font-size: var(--text-xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h3 {
+      font-size: var(--text-lg);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h4 {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    p {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+
+    label {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    button {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    input {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+  }
+}
+
+html {
+  font-size: var(--font-size);
+}
+
+@layer utilities {
+  /* iOS safe area bottom padding */
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Smooth, momentum scrolling containers */
+  .scroll-y {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Hide native scrollbars while keeping scroll functional */
+  .hide-scrollbar {
+    scrollbar-width: none; /* Firefox */
+  }
+  .hide-scrollbar::-webkit-scrollbar { /* Chrome/Safari */
+    width: 0;
+    height: 0;
+  }
+  
+  /* Smooth scroll behavior for programmatic scrolls */
+  .scroll-smooth {
+    scroll-behavior: smooth;
+  }
+}

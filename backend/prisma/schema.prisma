@@ -1,0 +1,389 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  username          String?  @unique
+  firstName         String?
+  lastName          String?
+  avatar            String?
+  phoneNumber       String?
+  isVerified        Boolean  @default(false)
+  isActive          Boolean  @default(true)
+  role              UserRole @default(USER)
+  preferences       UserPreferences?
+  
+  // Authentication
+  password          String
+  refreshToken      String?
+  emailVerifyToken  String?
+  passwordResetToken String?
+  passwordResetExpires DateTime?
+  
+  // Relationships
+  savedPlaces       SavedPlace[]
+  routeHistory      Route[]
+  socialPosts       SocialPost[]
+  socialComments    SocialComment[]
+  socialReactions   SocialReaction[]
+  reviews           Review[]
+  userSessions      UserSession[]
+  sharedLocations   SharedLocation[]
+  friendships       Friendship[] @relation("UserFriendships")
+  friendOf          Friendship[] @relation("FriendOf")
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("users")
+}
+
+model UserPreferences {
+  id                String  @id @default(cuid())
+  userId            String  @unique
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Navigation preferences
+  defaultTransportMode TransportMode @default(DRIVING)
+  voiceGuidance     Boolean @default(true)
+  avoidTolls        Boolean @default(false)
+  avoidHighways     Boolean @default(false)
+  avoidFerries      Boolean @default(false)
+  
+  // Display preferences
+  mapStyle          String  @default("standard")
+  darkMode          Boolean @default(false)
+  language          String  @default("en")
+  units             String  @default("metric") // metric or imperial
+  
+  // Privacy preferences
+  shareLocation     Boolean @default(false)
+  shareActivity     Boolean @default(true)
+  allowFriendRequests Boolean @default(true)
+  
+  // Notification preferences
+  trafficAlerts     Boolean @default(true)
+  weatherAlerts     Boolean @default(true)
+  socialNotifications Boolean @default(true)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("user_preferences")
+}
+
+model UserSession {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token         String   @unique
+  deviceId      String?
+  deviceType    String?
+  ipAddress     String?
+  userAgent     String?
+  isActive      Boolean  @default(true)
+  expiresAt     DateTime
+  lastUsedAt    DateTime @default(now())
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("user_sessions")
+}
+
+// Places and Locations
+model Place {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  address       String
+  latitude      Float
+  longitude     Float
+  category      String?
+  subcategory   String?
+  rating        Float?
+  priceLevel    Int?     // 1-4 scale
+  phoneNumber   String?
+  website       String?
+  openingHours  Json?
+  photos        String[]
+  amenities     String[]
+  isVerified    Boolean  @default(false)
+  
+  // External IDs
+  googlePlaceId String?  @unique
+  mapboxId      String?  @unique
+  
+  // Relationships
+  savedPlaces   SavedPlace[]
+  reviews       Review[]
+  socialPosts   SocialPost[]
+  routeWaypoints RouteWaypoint[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("places")
+  @@index([latitude, longitude])
+  @@index([category, subcategory])
+}
+
+model SavedPlace {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  placeId       String?
+  place         Place?   @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  
+  name          String
+  notes         String?
+  category      SavedPlaceCategory @default(OTHER)
+  isHome        Boolean  @default(false)
+  isWork        Boolean  @default(false)
+  
+  // For custom locations without a Place record
+  customLatitude  Float?
+  customLongitude Float?
+  customAddress   String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, placeId])
+  @@map("saved_places")
+}
+
+// Routes and Navigation
+model Route {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name              String?
+  transportMode     TransportMode @default(DRIVING)
+  startLatitude     Float
+  startLongitude    Float
+  startAddress      String
+  endLatitude       Float
+  endLongitude      Float
+  endAddress        String
+  
+  distance          Float    // in meters
+  duration          Int      // in seconds
+  routeGeometry     Json?    // Polyline or GeoJSON
+  waypoints         RouteWaypoint[]
+  
+  // Route options
+  avoidTolls        Boolean  @default(false)
+  avoidHighways     Boolean  @default(false)
+  avoidFerries      Boolean  @default(false)
+  
+  // Status
+  status            RouteStatus @default(PLANNED)
+  startedAt         DateTime?
+  completedAt       DateTime?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("routes")
+  @@index([userId, createdAt])
+}
+
+model RouteWaypoint {
+  id            String @id @default(cuid())
+  routeId       String
+  route         Route  @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  placeId       String?
+  place         Place? @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  
+  latitude      Float
+  longitude     Float
+  address       String?
+  order         Int
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("route_waypoints")
+  @@index([routeId, order])
+}
+
+// Social Features
+model SocialPost {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  placeId       String?
+  place         Place?   @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  
+  content       String?
+  type          PostType @default(CHECK_IN)
+  photos        String[]
+  latitude      Float?
+  longitude     Float?
+  
+  // Relationships
+  comments      SocialComment[]
+  reactions     SocialReaction[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("social_posts")
+  @@index([userId, createdAt])
+}
+
+model SocialComment {
+  id            String @id @default(cuid())
+  postId        String
+  post          SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  content       String
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("social_comments")
+}
+
+model SocialReaction {
+  id            String @id @default(cuid())
+  postId        String
+  post          SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type          ReactionType @default(LIKE)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([postId, userId])
+  @@map("social_reactions")
+}
+
+model Friendship {
+  id            String @id @default(cuid())
+  userId        String
+  user          User   @relation("UserFriendships", fields: [userId], references: [id], onDelete: Cascade)
+  friendId      String
+  friend        User   @relation("FriendOf", fields: [friendId], references: [id], onDelete: Cascade)
+  
+  status        FriendshipStatus @default(PENDING)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, friendId])
+  @@map("friendships")
+}
+
+model Review {
+  id            String @id @default(cuid())
+  userId        String
+  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  placeId       String
+  place         Place  @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  
+  rating        Float  // 1-5 scale
+  content       String?
+  photos        String[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, placeId])
+  @@map("reviews")
+}
+
+// Real-time Features
+model SharedLocation {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  latitude      Float
+  longitude     Float
+  accuracy      Float?
+  heading       Float?
+  speed         Float?
+  
+  isActive      Boolean  @default(true)
+  expiresAt     DateTime?
+  shareToken    String   @unique
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("shared_locations")
+  @@index([userId, isActive])
+}
+
+// Enums
+enum UserRole {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+enum TransportMode {
+  DRIVING
+  WALKING
+  TRANSIT
+  CYCLING
+}
+
+enum SavedPlaceCategory {
+  HOME
+  WORK
+  FAVORITE
+  RESTAURANT
+  SHOPPING
+  ENTERTAINMENT
+  HEALTH
+  EDUCATION
+  OTHER
+}
+
+enum RouteStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum PostType {
+  CHECK_IN
+  REVIEW
+  PHOTO
+  TIP
+  INCIDENT
+}
+
+enum ReactionType {
+  LIKE
+  LOVE
+  LAUGH
+  ANGRY
+  SAD
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
