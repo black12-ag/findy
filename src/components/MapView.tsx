@@ -52,6 +52,8 @@ export function MapView({
   const [mapStyle, setMapStyle] = useState<'standard' | 'satellite' | 'terrain' | 'dark'>('standard');
   const [selectedPlace, setSelectedPlace] = useState<any>(null);
   const [isPlaceSheetOpen, setIsPlaceSheetOpen] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
 
   // MapLibre refs
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -72,32 +74,68 @@ export function MapView({
     }
   }, [centerSignal]);
  
-  // Initialize MapLibre map
+  // Initialize MapLibre map (even if we don't have currentLocation yet)
   useEffect(() => {
-    if (mapRef.current || !mapContainerRef.current || !currentLocation) return;
+    if (mapRef.current || !mapContainerRef.current) return;
+
+    const styleUrl = import.meta.env.VITE_MAP_STYLE_URL || 'https://demotiles.maplibre.org/style.json';
+    const defaultCenter: [number, number] = [-122.4194, 37.7749]; // SF fallback for dev/demo
+    const startCenter: [number, number] = currentLocation 
+      ? [currentLocation.lng, currentLocation.lat]
+      : defaultCenter;
+
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: 'https://demotiles.maplibre.org/style.json',
-      center: [currentLocation.lng, currentLocation.lat],
+      style: styleUrl,
+      center: startCenter,
       zoom: 14,
     });
     mapRef.current = map;
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left');
-    currentMarkerRef.current = new maplibregl.Marker({ color: '#3B82F6' })
-      .setLngLat([currentLocation.lng, currentLocation.lat])
-      .addTo(map);
+
+    // Helpful debug
+    logger.info('Map init', { styleUrl, startCenter });
+
+    map.on('load', () => {
+      setMapLoaded(true);
+      setMapError(null);
+    });
+
+    map.on('error', (e) => {
+      // Capture style/tile loading errors (401/403/etc.)
+      const message = (e && (e as any).error && (e as any).error.message) || 'Map error';
+      setMapError(message);
+      logger.error('Map error', { message, event: e });
+    });
+
+    // If we already have a current location on mount, add the marker
+    if (currentLocation) {
+      currentMarkerRef.current = new maplibregl.Marker({ color: '#3B82F6' })
+        .setLngLat([currentLocation.lng, currentLocation.lat])
+        .addTo(map);
+    }
+
     return () => {
       map.remove();
       mapRef.current = null;
       currentMarkerRef.current = null;
       selectedMarkerRef.current = null;
     };
-  }, [currentLocation]);
+  }, []);
 
-  // Update current location marker
+  // Update current location marker and center when location changes
   useEffect(() => {
     if (!mapRef.current || !currentLocation) return;
-    currentMarkerRef.current?.setLngLat([currentLocation.lng, currentLocation.lat]);
+    const map = mapRef.current;
+    if (!currentMarkerRef.current) {
+      currentMarkerRef.current = new maplibregl.Marker({ color: '#3B82F6' })
+        .setLngLat([currentLocation.lng, currentLocation.lat])
+        .addTo(map);
+    } else {
+      currentMarkerRef.current.setLngLat([currentLocation.lng, currentLocation.lat]);
+    }
+    // Smoothly center the map on the new location once
+    map.flyTo({ center: [currentLocation.lng, currentLocation.lat], zoom: Math.max(12, map.getZoom()) });
   }, [currentLocation?.lat, currentLocation?.lng]);
 
   // Update selected marker
@@ -192,6 +230,17 @@ export function MapView({
 
   return (
     <div className="w-full h-full relative">
+      {/* Map status / errors */}
+      {!mapLoaded && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-white/90 text-gray-700 text-sm px-3 py-1 rounded shadow z-50">
+          Loading map...
+        </div>
+      )}
+      {mapError && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-red-50 text-red-700 text-sm px-3 py-1 rounded border border-red-200 shadow z-50">
+          Map error: {mapError}
+        </div>
+      )}
       {/* MapLibre map container */}
       <div ref={mapContainerRef} className="absolute inset-0" />
 

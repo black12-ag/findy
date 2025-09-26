@@ -145,7 +145,7 @@ class GeolocationService {
         },
         (error) => {
           // If in development mode and we have a last known position, use it
-          if (process.env.NODE_ENV === 'development' && this.lastKnownPosition) {
+          if (import.meta.env?.DEV && this.lastKnownPosition) {
             const age = Date.now() - this.lastKnownPosition.timestamp;
             if (age < 600000) { // 10 minutes
               resolve(this.lastKnownPosition);
@@ -153,16 +153,16 @@ class GeolocationService {
             }
           }
           
-          // If in development mode and no last known position, provide a default
-          if (process.env.NODE_ENV === 'development' && error.code === error.TIMEOUT) {
+          // If in development mode and no last known position, provide a sane default (San Francisco)
+          if (import.meta.env?.DEV && error.code === error.TIMEOUT) {
             const defaultPosition: GeolocationPosition = {
-              latitude: 37.7749,
-              longitude: -122.4194,
-              altitude: 0,
+              lat: 37.7749,
+              lng: -122.4194,
               accuracy: 1000,
-              altitudeAccuracy: null,
-              heading: null,
-              speed: null,
+              altitude: 0,
+              altitudeAccuracy: undefined,
+              heading: undefined,
+              speed: undefined,
               timestamp: Date.now()
             };
             this.lastKnownPosition = defaultPosition;
@@ -343,7 +343,7 @@ class GeolocationService {
   /**
    * Convert native GeolocationPosition to our format
    */
-  private convertPosition(position: GeolocationPosition): GeolocationPosition {
+  private convertPosition(position: globalThis.GeolocationPosition): GeolocationPosition {
     return {
       lat: position.coords.latitude,
       lng: position.coords.longitude,
@@ -408,7 +408,9 @@ export const useGeolocation = (options: GeolocationOptions = {}) => {
             });
 
             unsubscribeError = geolocationService.subscribeToErrors((err) => {
-              setError(geolocationService.createLocationError(err));
+              // Use a safe public formatting instead of calling a private method
+              const message = err?.message || 'Geolocation error occurred';
+              setError(new Error(message));
             });
           } else {
             const pos = await geolocationService.getCurrentPosition(options);

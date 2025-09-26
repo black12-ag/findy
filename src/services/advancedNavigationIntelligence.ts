@@ -1079,39 +1079,7 @@ class AdvancedNavigationIntelligenceService {
     }
   }
 
-  /**
-   * Public method to analyze weather impact for integration test
-   */
-  async analyzeWeatherImpact(location: { lat: number; lng: number }): Promise<WeatherImpactAnalysis | null> {
-    try {
-      const impact: WeatherImpactAnalysis = {
-        conditions: {
-          temperature: 20,
-          precipitation: 0,
-          windSpeed: 10,
-          visibility: 10,
-          roadConditions: 'dry'
-        },
-        impact: {
-          drivingTime: 1.0,
-          walkingTime: 1.0,
-          cyclingTime: 1.0,
-          transitReliability: 0.95
-        },
-        recommendations: {
-          suggestedMode: 'driving',
-          warnings: [],
-          routeModifications: []
-        },
-        forecast: []
-      };
-      
-      return impact;
-    } catch (error) {
-      logger.error('Weather impact analysis failed:', error);
-      return null;
-    }
-  }
+
 
   /**
    * Public method to find parking for integration test

@@ -80,12 +80,12 @@ export const sendFriendRequest = async (
       where: {
         OR: [
           {
-            requesterId,
-            addresseeId: targetUser.id,
+            userId: requesterId,
+            friendId: targetUser.id,
           },
           {
-            requesterId: targetUser.id,
-            addresseeId: requesterId,
+            userId: targetUser.id,
+            friendId: requesterId,
           },
         ],
       },
@@ -105,8 +105,7 @@ export const sendFriendRequest = async (
     });
 
     if (targetPreferences) {
-      const privacy = JSON.parse(targetPreferences.privacy as string);
-      if (!privacy.allowFriendRequests) {
+      if (!targetPreferences.allowFriendRequests) {
         throw new AppError('User is not accepting friend requests', 403);
       }
     }
@@ -116,29 +115,11 @@ export const sendFriendRequest = async (
       data: {
         userId: requesterId,
         friendId: targetUser.id,
-        requesterId,
-        addresseeId: targetUser.id,
         status: 'PENDING',
       },
       include: {
-        requester: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            avatar: true,
-          },
-        },
-        addressee: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            avatar: true,
-          },
-        },
+        user: true,
+        friend: true,
       },
     });
 
@@ -187,7 +168,7 @@ export const respondToFriendRequest = async (
     const friendRequest = await prisma.friendship.findFirst({
       where: {
         id: requestId,
-        addresseeId: userId,
+        friendId: userId,
         status: 'PENDING',
       },
     });
@@ -203,24 +184,8 @@ export const respondToFriendRequest = async (
         status: action === 'ACCEPT' ? 'ACCEPTED' : 'BLOCKED',
       },
       include: {
-        requester: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            avatar: true,
-          },
-        },
-        addressee: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            avatar: true,
-          },
-        },
+        user: true,
+        friend: true,
       },
     });
 
@@ -231,7 +196,7 @@ export const respondToFriendRequest = async (
       properties: {
         requestId,
         action,
-        requesterId: friendRequest.requesterId,
+        requesterId: friendRequest.userId,
       },
     });
 
@@ -269,30 +234,14 @@ export const getFriends = async (
       prisma.friendship.findMany({
         where: {
           OR: [
-            { requesterId: userId },
-            { addresseeId: userId },
+            { userId: userId },
+            { friendId: userId },
           ],
           status,
         },
         include: {
-          requester: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              avatar: true,
-            },
-          },
-          addressee: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              avatar: true,
-            },
-          },
+          user: true,
+          friend: true,
         },
         orderBy: {
           createdAt: 'desc',
@@ -303,8 +252,8 @@ export const getFriends = async (
       prisma.friendship.count({
         where: {
           OR: [
-            { requesterId: userId },
-            { addresseeId: userId },
+            { userId: userId },
+            { friendId: userId },
           ],
           status,
         },
@@ -314,7 +263,7 @@ export const getFriends = async (
     // Format response to show the friend (not the current user)
     const friends = friendships.map(friendship => ({
       ...friendship,
-      friend: friendship.requesterId === userId ? friendship.addressee : friendship.requester,
+      friend: friendship.userId === userId ? friendship.friend : friendship.user,
     }));
 
     res.status(200).json({
@@ -325,6 +274,8 @@ export const getFriends = async (
         limit,
         total,
         totalPages: Math.ceil(total / limit),
+        hasNextPage: page < Math.ceil(total / limit),
+        hasPrevPage: page > 1,
       },
     });
   } catch (error) {
@@ -354,8 +305,8 @@ export const removeFriend = async (
       where: {
         id: friendshipId,
         OR: [
-          { requesterId: userId },
-          { addresseeId: userId },
+          { userId: userId },
+          { friendId: userId },
         ],
         status: 'ACCEPTED',
       },
@@ -409,21 +360,17 @@ export const shareRoute = async (
       },
     });
 
-    if (!route) {
-      throw new AppError('Route not found', 404);
-    }
-
     // Verify all friend IDs are valid friends
     const friendships = await prisma.friendship.findMany({
       where: {
         OR: [
           {
-            requesterId: userId,
-            addresseeId: { in: friendIds },
+            userId: userId,
+            friendId: { in: friendIds },
           },
           {
-            requesterId: { in: friendIds },
-            addresseeId: userId,
+            userId: { in: friendIds },
+            friendId: userId,
           },
         ],
         status: 'ACCEPTED',
@@ -442,9 +389,9 @@ export const shareRoute = async (
             userId,
             type: 'route',
             itemId: routeId,
-            title: route.name,
+            title: route!.name,
             message: message ? sanitizeInput(message) : null,
-            recipients: [friendId],
+            recipientsJson: JSON.stringify([friendId]),
             shareToken: Math.random().toString(36).substring(2, 15),
           },
         })
@@ -508,12 +455,12 @@ export const sharePlace = async (
       where: {
         OR: [
           {
-            requesterId: userId,
-            addresseeId: { in: friendIds },
+            userId: userId,
+            friendId: { in: friendIds },
           },
           {
-            requesterId: { in: friendIds },
-            addresseeId: userId,
+            userId: { in: friendIds },
+            friendId: userId,
           },
         ],
         status: 'ACCEPTED',
@@ -534,12 +481,13 @@ export const sharePlace = async (
             itemId: placeId,
             title: place.name,
             message: message ? sanitizeInput(message) : null,
-            recipients: [friendId],
+            recipientsJson: JSON.stringify([friendId]),
             shareToken: Math.random().toString(36).substring(2, 15),
           },
         })
       )
     );
+
 
     // Track analytics
     await analyticsService.trackEvent({
@@ -583,7 +531,7 @@ export const getSharedContent = async (
       limit,
     });
 
-    const where: any = { recipients: { has: userId } };
+    const where: any = { recipientsJson: { contains: userId } };
     if (type) {
       where.type = type;
     }
