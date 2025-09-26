@@ -7,7 +7,7 @@ const error_1 = require("@/utils/error");
 const security_1 = require("@/utils/security");
 const logger_1 = require("@/config/logger");
 const maps_1 = require("@/services/maps");
-const analytics_1 = require("@/services/analytics");
+const analytics_simple_1 = require("@/services/analytics-simple");
 const calculateRouteSchema = zod_1.z.object({
     origin: zod_1.z.object({
         lat: zod_1.z.number().min(-90).max(90),
@@ -24,7 +24,7 @@ const calculateRouteSchema = zod_1.z.object({
         lng: zod_1.z.number().min(-180).max(180),
         address: zod_1.z.string().optional(),
     })).optional(),
-    travelMode: zod_1.z.enum(['DRIVING', 'WALKING', 'BICYCLING', 'TRANSIT']).default('DRIVING'),
+    travelMode: zod_1.z.enum(['DRIVING', 'WALKING', 'CYCLING', 'TRANSIT']).default('DRIVING'),
     optimize: zod_1.z.boolean().default(false),
     avoidTolls: zod_1.z.boolean().default(false),
     avoidHighways: zod_1.z.boolean().default(false),
@@ -46,10 +46,9 @@ const saveRouteSchema = zod_1.z.object({
         lng: zod_1.z.number().min(-180).max(180),
         address: zod_1.z.string(),
     })).optional(),
-    travelMode: zod_1.z.enum(['DRIVING', 'WALKING', 'BICYCLING', 'TRANSIT']),
+    travelMode: zod_1.z.enum(['DRIVING', 'WALKING', 'CYCLING', 'TRANSIT']),
     distance: zod_1.z.number(),
     duration: zod_1.z.number(),
-    isFavorite: zod_1.z.boolean().default(false),
 });
 const calculateRoute = async (req, res) => {
     try {
@@ -70,22 +69,20 @@ const calculateRoute = async (req, res) => {
             avoidTolls,
             avoidHighways,
         });
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId: req.user?.id,
             event: 'route_calculated',
             properties: {
                 travelMode,
-                distance: route.distance.value,
-                duration: route.duration.value,
+                distance: route.distance,
+                duration: route.duration,
                 waypointsCount: waypoints?.length || 0,
                 optimized: optimize,
             },
         });
         res.status(200).json({
             success: true,
-            data: {
-                route,
-            },
+            data: route,
         });
     }
     catch (error) {
@@ -96,7 +93,7 @@ const calculateRoute = async (req, res) => {
 exports.calculateRoute = calculateRoute;
 const saveRoute = async (req, res) => {
     try {
-        const { name, origin, destination, waypoints, travelMode, distance, duration, isFavorite, } = saveRouteSchema.parse(req.body);
+        const { name, origin, destination, waypoints, travelMode, distance, duration, } = saveRouteSchema.parse(req.body);
         const userId = req.user.id;
         logger_1.logger.info('Saving route', {
             userId,
@@ -118,20 +115,34 @@ const saveRoute = async (req, res) => {
             data: {
                 userId,
                 name: (0, security_1.sanitizeInput)(name),
-                originLat: origin.lat,
-                originLng: origin.lng,
-                originAddress: (0, security_1.sanitizeInput)(origin.address),
-                destinationLat: destination.lat,
-                destinationLng: destination.lng,
-                destinationAddress: (0, security_1.sanitizeInput)(destination.address),
-                waypoints: waypoints ? JSON.stringify(waypoints) : null,
-                travelMode,
+                startLatitude: origin.lat,
+                startLongitude: origin.lng,
+                startAddress: (0, security_1.sanitizeInput)(origin.address || ''),
+                endLatitude: destination.lat,
+                endLongitude: destination.lng,
+                endAddress: (0, security_1.sanitizeInput)(destination.address || ''),
+                transportMode: travelMode,
                 distance,
                 duration,
-                isFavorite,
+                waypoints: waypoints ? {
+                    create: waypoints.map((waypoint, index) => ({
+                        order: index,
+                        latitude: waypoint.lat,
+                        longitude: waypoint.lng,
+                        address: (0, security_1.sanitizeInput)(waypoint.address || ''),
+                    }))
+                } : undefined,
+            },
+            include: {
+                waypoints: {
+                    orderBy: { order: 'asc' },
+                    include: {
+                        place: true,
+                    },
+                },
             },
         });
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId,
             event: 'route_saved',
             properties: {
@@ -140,14 +151,15 @@ const saveRoute = async (req, res) => {
                 distance,
                 duration,
                 waypointsCount: waypoints?.length || 0,
-                isFavorite,
             },
         });
+        const formattedRoute = {
+            ...savedRoute,
+            name: savedRoute.name || undefined,
+        };
         res.status(201).json({
             success: true,
-            data: {
-                route: savedRoute,
-            },
+            data: formattedRoute,
         });
     }
     catch (error) {
@@ -158,24 +170,24 @@ const saveRoute = async (req, res) => {
 exports.saveRoute = saveRoute;
 const getUserRoutes = async (req, res) => {
     try {
-        const { travelMode, favorites, sortBy = 'createdAt', sortOrder = 'desc', page = 1, limit = 20 } = req.query;
+        const { status, transportMode, sortBy = 'createdAt', sortOrder = 'desc', page = 1, limit = 20 } = req.query;
         const userId = req.user.id;
         const skip = (page - 1) * limit;
         logger_1.logger.info('Getting user routes', {
             userId,
-            travelMode,
-            favorites,
+            transportMode,
+            status,
             sortBy,
             sortOrder,
             page,
             limit,
         });
         const where = { userId };
-        if (travelMode) {
-            where.travelMode = travelMode;
+        if (transportMode) {
+            where.transportMode = transportMode;
         }
-        if (favorites === 'true') {
-            where.isFavorite = true;
+        if (status) {
+            where.status = status;
         }
         const orderBy = {};
         if (sortBy === 'distance' || sortBy === 'duration') {
@@ -187,8 +199,15 @@ const getUserRoutes = async (req, res) => {
         const [routes, total] = await Promise.all([
             database_1.prisma.route.findMany({
                 where,
+                include: {
+                    waypoints: {
+                        orderBy: { order: 'asc' },
+                        include: {
+                            place: true,
+                        },
+                    },
+                },
                 orderBy: [
-                    { isFavorite: 'desc' },
                     orderBy,
                 ],
                 skip,
@@ -198,18 +217,18 @@ const getUserRoutes = async (req, res) => {
         ]);
         const formattedRoutes = routes.map(route => ({
             ...route,
-            waypoints: route.waypoints ? JSON.parse(route.waypoints) : null,
+            name: route.name || undefined,
         }));
         res.status(200).json({
             success: true,
-            data: {
-                routes: formattedRoutes,
-                pagination: {
-                    page,
-                    limit,
-                    total,
-                    totalPages: Math.ceil(total / limit),
-                },
+            data: formattedRoutes,
+            meta: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
+                hasNextPage: page < Math.ceil(total / limit),
+                hasPrevPage: page > 1,
             },
         });
     }
@@ -236,7 +255,7 @@ const deleteRoute = async (req, res) => {
         if (deletedRoute.count === 0) {
             throw new error_1.AppError('Route not found', 404);
         }
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId,
             event: 'route_deleted',
             properties: {
@@ -255,57 +274,15 @@ const deleteRoute = async (req, res) => {
 };
 exports.deleteRoute = deleteRoute;
 const toggleRouteFavorite = async (req, res) => {
-    try {
-        const { routeId } = req.params;
-        const userId = req.user.id;
-        logger_1.logger.info('Toggling route favorite', {
-            userId,
-            routeId,
-        });
-        const route = await database_1.prisma.route.findFirst({
-            where: {
-                id: routeId,
-                userId,
-            },
-        });
-        if (!route) {
-            throw new error_1.AppError('Route not found', 404);
-        }
-        const updatedRoute = await database_1.prisma.route.update({
-            where: {
-                id: routeId,
-            },
-            data: {
-                isFavorite: !route.isFavorite,
-            },
-        });
-        await analytics_1.analyticsService.trackEvent({
-            userId,
-            event: 'route_favorite_toggled',
-            properties: {
-                routeId,
-                isFavorite: updatedRoute.isFavorite,
-            },
-        });
-        res.status(200).json({
-            success: true,
-            data: {
-                route: {
-                    ...updatedRoute,
-                    waypoints: updatedRoute.waypoints ? JSON.parse(updatedRoute.waypoints) : null,
-                },
-            },
-        });
-    }
-    catch (error) {
-        logger_1.logger.error('Error toggling route favorite:', error);
-        throw new error_1.AppError('Failed to toggle favorite', 500);
-    }
+    res.status(501).json({
+        success: false,
+        message: 'Favorite functionality not available in current schema',
+    });
 };
 exports.toggleRouteFavorite = toggleRouteFavorite;
 const optimizeRoute = async (req, res) => {
     try {
-        const { origin, destination, waypoints } = req.body;
+        const { waypoints, transportMode = 'DRIVING', avoidTolls, avoidHighways } = req.body;
         if (!waypoints || waypoints.length < 2) {
             throw new error_1.AppError('At least 2 waypoints required for optimization', 400);
         }
@@ -313,27 +290,30 @@ const optimizeRoute = async (req, res) => {
             userId: req.user?.id,
             waypointsCount: waypoints.length,
         });
+        const origin = waypoints[0];
+        const destination = waypoints[waypoints.length - 1];
+        const intermediateWaypoints = waypoints.slice(1, -1);
         const route = await maps_1.mapsService.calculateRoute({
             origin,
             destination,
-            waypoints,
-            travelMode: 'DRIVING',
+            waypoints: intermediateWaypoints,
+            travelMode: transportMode,
             optimize: true,
+            avoidTolls,
+            avoidHighways,
         });
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId: req.user?.id,
             event: 'route_optimized',
             properties: {
                 waypointsCount: waypoints.length,
-                distance: route.distance.value,
-                duration: route.duration.value,
+                distance: route.distance,
+                duration: route.duration,
             },
         });
         res.status(200).json({
             success: true,
-            data: {
-                route,
-            },
+            data: route,
         });
     }
     catch (error) {

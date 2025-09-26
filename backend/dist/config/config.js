@@ -76,6 +76,16 @@ exports.config = {
         rateLimitWindowMs: env.RATE_LIMIT_WINDOW_MS,
         rateLimitMaxRequests: env.RATE_LIMIT_MAX_REQUESTS,
     },
+    cors: {
+        allowedOrigins: [env.CORS_ORIGIN, 'http://localhost:3000'],
+    },
+    rateLimit: {
+        windowMs: env.RATE_LIMIT_WINDOW_MS,
+        max: env.RATE_LIMIT_MAX_REQUESTS,
+    },
+    node: {
+        env: env.NODE_ENV,
+    },
     logging: {
         level: env.LOG_LEVEL,
     },

@@ -20,6 +20,7 @@ import { Switch } from '../ui/switch';
 import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
 import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
+import { logger } from '../../utils/logger';
 
 interface SafetyCenterProps {
   onBack: () => void;
@@ -80,7 +81,7 @@ export function SafetyCenter({ onBack }: SafetyCenterProps) {
   }, [crashDetected, emergencyCountdown]);
 
   const callEmergency = () => {
-    console.log('Calling emergency services...');
+    logger.info('Calling emergency services...');
     // Implement actual emergency call logic
   };
 

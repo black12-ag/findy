@@ -4,7 +4,7 @@ import { prisma } from '@/config/database';
 import { AppError } from '@/utils/error';
 import { sanitizeInput } from '@/utils/security';
 import { logger } from '@/config/logger';
-import { analyticsService } from '@/services/analytics';
+import { analyticsService } from "@/services/analytics-simple";
 import type {
   UpdateProfileRequest,
   UpdatePreferencesRequest,

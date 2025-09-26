@@ -1,7 +1,9 @@
 import { Request } from 'express';
 import { User } from '@prisma/client';
 export interface AuthenticatedRequest extends Request {
-    user?: User;
+    user?: User & {
+        id: string;
+    };
 }
 export interface ApiResponse<T = any> {
     success: boolean;
@@ -228,8 +230,11 @@ export interface UploadedFile {
     url?: string;
 }
 export interface AnalyticsEvent {
+    id?: string;
     userId?: string;
+    sessionId?: string;
     event: string;
+    category?: string;
     properties?: Record<string, any>;
     timestamp?: Date;
 }

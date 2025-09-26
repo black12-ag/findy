@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, 
   Bus, 
@@ -13,12 +13,15 @@ import {
   Route,
   ChevronRight,
   Wifi,
-  WifiOff
+  WifiOff,
+  RefreshCw
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { transitService, TransitItinerary, TransitAlert, NearbyDeparture } from '../services/transitService';
+import { enhancedTransitService, MultimodalItinerary, TransitServiceOptions } from '../services/enhancedTransitService';
 
 interface Location {
   id: string;
@@ -29,70 +32,133 @@ interface Location {
   category?: string;
 }
 
-interface TransitRoute {
-  id: string;
-  from: Location;
-  to: Location;
-  duration: string;
-  walkingTime: string;
-  totalTime: string;
-  fare: string;
-  steps: TransitStep[];
-  accessibility: string[];
-  alerts?: string[];
-}
-
-interface TransitStep {
-  id: string;
-  type: 'walk' | 'bus' | 'train' | 'subway';
-  line?: string;
-  duration: string;
-  departure?: string;
-  arrival?: string;
-  platform?: string;
-  direction?: string;
-  stops?: number;
-  realTimeDelay?: string;
-}
+// Using TransitItinerary from transitService instead of local interfaces
 
 interface PublicTransitPanelProps {
   from: Location | null;
   to: Location | null;
   onBack: () => void;
-  onStartNavigation: (route: TransitRoute) => void;
+  onStartNavigation: (route: any) => void;
 }
 
 export function PublicTransitPanel({ from, to, onBack, onStartNavigation }: PublicTransitPanelProps) {
   const [selectedRoute, setSelectedRoute] = useState(0);
   const [activeTab, setActiveTab] = useState('routes');
   const [offlineMode, setOfflineMode] = useState(false);
-  
-  // Mock service alerts
-  const serviceAlerts = [
-    { 
-      id: '1', 
-      line: 'Red Line', 
-      type: 'delay', 
-      message: 'Delays of up to 10 minutes due to signal problems', 
-      severity: 'moderate' 
-    },
-    { 
-      id: '2', 
-      line: '38 Geary', 
-      type: 'detour', 
-      message: 'Route detour on Geary St between 4th-8th St due to construction', 
-      severity: 'minor' 
-    },
-    { 
-      id: '3', 
-      line: 'All Lines', 
-      type: 'service', 
-      message: 'Weekend service schedule in effect', 
-      severity: 'info' 
+  const [transitRoutes, setTransitRoutes] = useState<TransitItinerary[]>([]);
+  const [multimodalRoutes, setMultimodalRoutes] = useState<MultimodalItinerary[]>([]);
+  const [nearbyDepartures, setNearbyDepartures] = useState<NearbyDeparture[]>([]);
+  const [serviceAlerts, setServiceAlerts] = useState<TransitAlert[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [useEnhancedService, setUseEnhancedService] = useState(true);
+  // Initialize enhanced transit service
+  useEffect(() => {
+    if (useEnhancedService) {
+      enhancedTransitService.initialize({
+        location: from ? { lat: from.lat, lng: from.lng } : undefined,
+        agencies: ['MTA-NYC', 'SFMTA', 'WMATA'], // Auto-detect based on location
+      });
     }
-  ];
+  }, [from, useEnhancedService]);
+
+  // Real data loading
+  useEffect(() => {
+    if (from && to) {
+      loadTransitData();
+    }
+  }, [from, to]);
+
+  useEffect(() => {
+    // Auto-refresh live data every 30 seconds
+    if (activeTab === 'nearby' && !offlineMode) {
+      const interval = setInterval(loadLiveData, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, offlineMode]);
+
+  const loadTransitData = async () => {
+    if (!from || !to) return;
+    
+    setIsLoading(true);
+    try {
+      if (useEnhancedService) {
+        // Use enhanced service for multimodal routing
+        const serviceOptions: TransitServiceOptions = {
+          max_walk_distance: 800,
+          max_transfers: 3,
+          wheelchair_accessible: false,
+          bikes_allowed: false,
+          max_wait_time: 15,
+          include_alternatives: true,
+          real_time_updates: true
+        };
+        
+        const multimodalRoutes = await enhancedTransitService.planTrip(
+          { lat: from.lat, lng: from.lng, name: from.name },
+          { lat: to.lat, lng: to.lng, name: to.name },
+          {
+            departure_time: new Date().toISOString(),
+            service_options: serviceOptions,
+            optimize_for: 'time'
+          }
+        );
+        setMultimodalRoutes(multimodalRoutes);
+        
+        // Load service alerts from enhanced service
+        const alerts = await enhancedTransitService.getServiceAlerts();
+        setServiceAlerts(alerts as TransitAlert[]); // Type compatibility
+      } else {
+        // Fallback to basic service
+        const routes = await transitService.planTrip(
+          { lat: from.lat, lng: from.lng },
+          { lat: to.lat, lng: to.lng },
+          {
+            departureTime: new Date().toISOString(),
+            maxWalkDistance: 800,
+            optimize: 'TIME'
+          }
+        );
+        setTransitRoutes(routes);
+        
+        // Load service alerts
+        const alerts = await transitService.getAlerts();
+        setServiceAlerts(alerts);
+      }
+      
+      setLastUpdated(new Date());
+    } catch (error) {
+      console.warn('Enhanced transit service failed, falling back to basic service:', error);
+      setUseEnhancedService(false);
+      // Retry with basic service
+      if (useEnhancedService) {
+        await loadTransitData();
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadLiveData = async () => {
+    if (!from) return;
+    
+    try {
+      // Find nearby stops and get live departures
+      const stops = await transitService.findNearbyStops({ lat: from.lat, lng: from.lng }, 500);
+      if (stops.length > 0) {
+        const departures = await transitService.getDepartures(stops[0].id, 8);
+        setNearbyDepartures(departures);
+      }
+    } catch (error) {
+      // Handle error silently, use cached data
+    }
+  };
+
+  const refreshData = async () => {
+    await Promise.all([loadTransitData(), loadLiveData()]);
+  };
   
-  // Mock fare information
+  // Fare information - could be loaded from service
   const fareInfo = {
     adult: '$3.25',
     senior: '$1.60',
@@ -101,102 +167,6 @@ export function PublicTransitPanel({ from, to, onBack, onStartNavigation }: Publ
     monthly: '$89.00',
     weekly: '$25.00'
   };
-
-  // Mock transit routes
-  const transitRoutes: TransitRoute[] = [
-    {
-      id: '1',
-      from: from!,
-      to: to!,
-      duration: '32 min',
-      walkingTime: '8 min',
-      totalTime: '40 min',
-      fare: '$3.25',
-      accessibility: ['wheelchair', 'elevator'],
-      alerts: ['Bus 38 experiencing 5 min delays'],
-      steps: [
-        {
-          id: '1',
-          type: 'walk',
-          duration: '4 min',
-        },
-        {
-          id: '2',
-          type: 'bus',
-          line: '38 Geary',
-          duration: '18 min',
-          departure: '2:15 PM',
-          arrival: '2:33 PM',
-          platform: 'Stop A',
-          direction: 'Outbound',
-          stops: 12,
-          realTimeDelay: '+2 min'
-        },
-        {
-          id: '3',
-          type: 'walk',
-          duration: '2 min',
-        },
-        {
-          id: '4',
-          type: 'subway',
-          line: 'Red Line',
-          duration: '8 min',
-          departure: '2:35 PM',
-          arrival: '2:43 PM',
-          platform: 'Platform 2',
-          direction: 'Downtown',
-          stops: 4,
-        },
-        {
-          id: '5',
-          type: 'walk',
-          duration: '2 min',
-        }
-      ]
-    },
-    {
-      id: '2',
-      from: from!,
-      to: to!,
-      duration: '28 min',
-      walkingTime: '12 min',
-      totalTime: '40 min',
-      fare: '$2.75',
-      accessibility: ['wheelchair'],
-      steps: [
-        {
-          id: '1',
-          type: 'walk',
-          duration: '6 min',
-        },
-        {
-          id: '2',
-          type: 'train',
-          line: 'Express 101',
-          duration: '22 min',
-          departure: '2:18 PM',
-          arrival: '2:40 PM',
-          platform: 'Track 3',
-          direction: 'North',
-          stops: 8,
-        },
-        {
-          id: '3',
-          type: 'walk',
-          duration: '6 min',
-        }
-      ]
-    }
-  ];
-
-  // Mock nearby transit lines
-  const nearbyLines = [
-    { id: '1', name: '38 Geary', type: 'bus', nextArrival: '3 min', delay: '+2 min', color: '#FF6B35' },
-    { id: '2', name: 'Red Line', type: 'subway', nextArrival: '7 min', delay: 'On time', color: '#DC2626' },
-    { id: '3', name: '101 Express', type: 'train', nextArrival: '12 min', delay: 'On time', color: '#059669' },
-    { id: '4', name: '14 Mission', type: 'bus', nextArrival: '15 min', delay: '+1 min', color: '#7C3AED' },
-  ];
 
   const getStepIcon = (type: string) => {
     switch (type) {
@@ -257,15 +227,51 @@ export function PublicTransitPanel({ from, to, onBack, onStartNavigation }: Publ
             <TabsTrigger value="alerts">Alerts</TabsTrigger>
             <TabsTrigger value="fares">Fares</TabsTrigger>
           </TabsList>
+          
+          {/* Refresh Button */}
+          <div className="flex items-center justify-between mt-2">
+            <div className="text-xs text-gray-500">
+              {lastUpdated && `Updated ${lastUpdated.toLocaleTimeString()}`}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={refreshData}
+              disabled={isLoading}
+              className="text-xs"
+            >
+              <RefreshCw className={`w-3 h-3 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-hidden min-h-0">
           {/* Routes Tab */}
           <TabsContent value="routes" className="h-full flex flex-col mt-0">
             <div className="flex-1 p-4 space-y-3 scroll-y hide-scrollbar scroll-smooth">
-              {transitRoutes.map((route, index) => (
+              {isLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="w-6 h-6 animate-spin text-gray-400 mr-2" />
+                  <span className="text-gray-500">Finding routes...</span>
+                </div>
+              )}
+              
+              {!isLoading && transitRoutes.length === 0 && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-center">
+                    <Bus className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                    <p className="text-gray-500">No transit routes found</p>
+                    <Button variant="ghost" size="sm" onClick={loadTransitData} className="mt-2">
+                      Try again
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              {transitRoutes.map((itinerary, index) => (
                 <Card 
-                  key={route.id}
+                  key={`itinerary_${index}`}
                   className={`p-4 cursor-pointer transition-all ${
                     selectedRoute === index 
                       ? 'ring-2 ring-amber-500 border-transparent bg-amber-50' 
@@ -277,71 +283,88 @@ export function PublicTransitPanel({ from, to, onBack, onStartNavigation }: Publ
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <div className="flex items-center gap-3 mb-1">
-                        <h3 className="font-medium text-gray-900">{route.totalTime}</h3>
+                        <h3 className="font-medium text-gray-900">{Math.round(itinerary.duration / 60)} min</h3>
                         <Badge variant="secondary" className="text-green-700 bg-green-100">
-                          {route.fare}
+                          ${itinerary.fare?.total.toFixed(2) || '3.25'}
                         </Badge>
-                        {route.accessibility.includes('wheelchair') && (
+                        {itinerary.accessibility.wheelchair && (
                           <Accessibility className="w-4 h-4 text-blue-600" />
                         )}
                       </div>
                       <div className="flex items-center gap-4 text-sm text-gray-600">
                         <div className="flex items-center gap-1">
                           <Bus className="w-4 h-4" />
-                          <span>{route.duration}</span>
+                          <span>{Math.round(itinerary.transitTime / 60)} min</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <Navigation className="w-4 h-4" />
-                          <span>{route.walkingTime} walking</span>
+                          <span>{Math.round(itinerary.walkTime / 60)} min walking</span>
                         </div>
+                        {itinerary.transfers > 0 && (
+                          <div className="flex items-center gap-1">
+                            <Route className="w-4 h-4" />
+                            <span>{itinerary.transfers} transfer{itinerary.transfers > 1 ? 's' : ''}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Service Alerts */}
-                  {route.alerts && route.alerts.length > 0 && (
+                  {/* Service Alerts for this route */}
+                  {itinerary.legs.some(leg => leg.alerts?.length) && (
                     <div className="mb-4">
-                      {route.alerts.map((alert, alertIndex) => (
-                        <div key={alertIndex} className="flex items-start gap-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      {itinerary.legs.flatMap(leg => leg.alerts || []).map((alert, alertIndex) => (
+                        <div key={alertIndex} className="flex items-start gap-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg mb-2">
                           <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-                          <span className="text-sm text-yellow-800">{alert}</span>
+                          <span className="text-sm text-yellow-800">{alert.headerText}</span>
                         </div>
                       ))}
                     </div>
                   )}
 
-                  {/* Route Steps */}
+                  {/* Route Legs */}
                   <div className="space-y-3">
-                    {route.steps.map((step, stepIndex) => (
-                      <div key={step.id} className="flex items-center gap-3">
+                    {itinerary.legs.map((leg, legIndex) => (
+                      <div key={legIndex} className="flex items-center gap-3">
                         <div 
                           className="w-8 h-8 rounded-full flex items-center justify-center text-white flex-shrink-0"
-                          style={{ backgroundColor: getStepColor(step.type) }}
+                          style={{ backgroundColor: getStepColor(leg.type.toLowerCase()) }}
                         >
-                          {getStepIcon(step.type)}
+                          {getStepIcon(leg.type.toLowerCase())}
                         </div>
                         <div className="flex-1 min-w-0">
-                          {step.type === 'walk' ? (
+                          {leg.type === 'WALK' ? (
                             <div className="text-sm text-gray-900">
-                              Walk {step.duration}
+                              Walk {Math.round(leg.duration / 60)} min
+                              {leg.steps && leg.steps.length > 0 && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {leg.steps[0]}
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className="font-medium text-gray-900">{step.line}</span>
-                                {step.realTimeDelay && (
+                                <span className="font-medium text-gray-900">
+                                  {leg.route?.shortName} {leg.route?.longName}
+                                </span>
+                                {leg.realtime_delay && leg.realtime_delay > 0 && (
                                   <Badge variant="outline" className="text-red-600 border-red-200">
-                                    {step.realTimeDelay}
+                                    +{Math.round(leg.realtime_delay / 60)}m
                                   </Badge>
                                 )}
                               </div>
                               <div className="text-sm text-gray-600">
-                                {step.departure} - {step.arrival} • {step.platform} • {step.stops} stops
+                                {new Date(leg.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - 
+                                {new Date(leg.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                {leg.trip?.headsign && ` • ${leg.trip.headsign}`}
                               </div>
                             </div>
                           )}
                         </div>
-                        <div className="text-sm text-gray-500">{step.duration}</div>
+                        <div className="text-sm text-gray-500">
+                          {Math.round(leg.duration / 60)}m
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -354,7 +377,29 @@ export function PublicTransitPanel({ from, to, onBack, onStartNavigation }: Publ
               <Button
                 className="w-full"
                 style={{ backgroundColor: '#F59E0B' }}
-                onClick={() => onStartNavigation(transitRoutes[selectedRoute])}
+                onClick={() => {
+                  if (transitRoutes[selectedRoute]) {
+                    // Convert TransitItinerary to route format expected by navigation
+                    const itinerary = transitRoutes[selectedRoute];
+                    const route = {
+                      id: `transit_${selectedRoute}`,
+                      from: { name: from?.name, address: from?.address },
+                      to: { name: to?.name, address: to?.address },
+                      duration: `${Math.round(itinerary.duration / 60)} min`,
+                      totalTime: `${Math.round(itinerary.duration / 60)} min`,
+                      mode: 'transit',
+                      steps: itinerary.legs.map(leg => {
+                        if (leg.type === 'WALK') {
+                          return `Walk ${Math.round(leg.duration / 60)} minutes`;
+                        } else {
+                          return `${leg.route?.shortName || 'Transit'} • ${Math.round(leg.duration / 60)} minutes`;
+                        }
+                      })
+                    };
+                    onStartNavigation(route);
+                  }
+                }}
+                disabled={!transitRoutes[selectedRoute]}
               >
                 <Bus className="w-4 h-4 mr-2" />
                 Start Transit Navigation
@@ -373,33 +418,58 @@ export function PublicTransitPanel({ from, to, onBack, onStartNavigation }: Publ
                 </Button>
               </div>
 
-              {nearbyLines.map((line) => (
-                <Card key={line.id} className="p-4 hover:shadow-md transition-shadow cursor-pointer">
-                  <div className="flex items-center gap-4">
-                    <div 
-                      className="w-12 h-12 rounded-full flex items-center justify-center text-white"
-                      style={{ backgroundColor: line.color }}
-                    >
-                      {line.type === 'bus' ? <Bus className="w-6 h-6" /> : <Train className="w-6 h-6" />}
-                    </div>
-                    
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-medium text-gray-900">{line.name}</h4>
-                        <Badge variant="outline" className="capitalize">
-                          {line.type}
-                        </Badge>
+              {nearbyDepartures.length === 0 && !isLoading && (
+                <div className="text-center py-8">
+                  <Clock className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-500">No live departures available</p>
+                  <Button variant="ghost" size="sm" onClick={loadLiveData} className="mt-2">
+                    Refresh
+                  </Button>
+                </div>
+              )}
+              
+              {nearbyDepartures.map((departure, index) => {
+                const minutesToDeparture = Math.round((new Date(departure.estimatedDeparture).getTime() - Date.now()) / 60000);
+                const isDelayed = departure.delay > 60; // More than 1 minute delay
+                
+                return (
+                  <Card key={`${departure.route.id}_${index}`} className="p-4 hover:shadow-md transition-shadow cursor-pointer">
+                    <div className="flex items-center gap-4">
+                      <div 
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-white"
+                        style={{ backgroundColor: departure.route.color }}
+                      >
+                        {departure.route.type === 3 ? <Bus className="w-6 h-6" /> : <Train className="w-6 h-6" />}
                       </div>
-                      <div className="flex items-center gap-3 text-sm text-gray-600">
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-4 h-4" />
-                          <span>Next: {line.nextArrival}</span>
+                      
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-medium text-gray-900">{departure.route.shortName} {departure.route.longName}</h4>
+                          <Badge variant="outline" className="capitalize">
+                            {departure.route.type === 3 ? 'Bus' : 'Train'}
+                          </Badge>
+                          {departure.realtime && (
+                            <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                              Live
+                            </Badge>
+                          )}
                         </div>
-                        <span className={line.delay === 'On time' ? 'text-green-600' : 'text-red-600'}>
-                          {line.delay}
-                        </span>
+                        <div className="flex items-center gap-3 text-sm text-gray-600">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-4 h-4" />
+                            <span>
+                              {minutesToDeparture <= 0 ? 'Now' : 
+                               minutesToDeparture === 1 ? '1 min' : `${minutesToDeparture} min`}
+                            </span>
+                          </div>
+                          {departure.trip.headsign && (
+                            <span className="text-gray-500">to {departure.trip.headsign}</span>
+                          )}
+                          <span className={isDelayed ? 'text-red-600' : 'text-green-600'}>
+                            {departure.delay > 60 ? `+${Math.round(departure.delay / 60)}m` : 'On time'}
+                          </span>
+                        </div>
                       </div>
-                    </div>
 
                     <div className="flex flex-col items-end gap-2">
                       <Button variant="ghost" size="sm">
@@ -431,7 +501,8 @@ export function PublicTransitPanel({ from, to, onBack, onStartNavigation }: Publ
                     </div>
                   </div>
                 </Card>
-              ))}
+                );
+              })}
 
               {/* Service Alerts */}
               <Card className="p-4 bg-yellow-50 border-yellow-200">
@@ -463,13 +534,20 @@ export function PublicTransitPanel({ from, to, onBack, onStartNavigation }: Publ
                 </Button>
               </div>
 
+              {serviceAlerts.length === 0 && !isLoading && (
+                <div className="text-center py-8">
+                  <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-500">No active service alerts</p>
+                </div>
+              )}
+              
               {serviceAlerts.map((alert) => {
                 const getSeverityColor = (severity: string) => {
-                  switch (severity) {
-                    case 'moderate': return 'bg-yellow-50 border-yellow-200 text-yellow-800';
-                    case 'minor': return 'bg-blue-50 border-blue-200 text-blue-800';
-                    case 'info': return 'bg-gray-50 border-gray-200 text-gray-800';
-                    default: return 'bg-red-50 border-red-200 text-red-800';
+                  switch (severity.toLowerCase()) {
+                    case 'warning': return 'bg-yellow-50 border-yellow-200 text-yellow-800';
+                    case 'info': return 'bg-blue-50 border-blue-200 text-blue-800';
+                    case 'severe': return 'bg-red-50 border-red-200 text-red-800';
+                    default: return 'bg-gray-50 border-gray-200 text-gray-800';
                   }
                 };
 
@@ -479,19 +557,28 @@ export function PublicTransitPanel({ from, to, onBack, onStartNavigation }: Publ
                       <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-medium">{alert.line}</h4>
+                          <h4 className="font-medium">{alert.headerText}</h4>
                           <Badge variant="outline" className="capitalize text-xs">
-                            {alert.type}
+                            {alert.severity.toLowerCase()}
                           </Badge>
+                          {alert.routeIds && alert.routeIds.length > 0 && (
+                            <Badge variant="outline" className="text-xs">
+                              {alert.routeIds.join(', ')}
+                            </Badge>
+                          )}
                         </div>
-                        <p className="text-sm mb-3">{alert.message}</p>
+                        <p className="text-sm mb-3">{alert.descriptionText}</p>
+                        <div className="text-xs text-gray-500 mb-2">
+                          Valid until: {alert.validTo ? new Date(alert.validTo).toLocaleDateString() : 'Further notice'}
+                        </div>
                         <div className="flex gap-2">
-                          <Button variant="ghost" size="sm" className="text-xs p-0">
-                            View Details
-                          </Button>
-                          <Button variant="ghost" size="sm" className="text-xs p-0">
-                            Get Updates
-                          </Button>
+                          {alert.url && (
+                            <Button variant="ghost" size="sm" className="text-xs p-0">
+                              <a href={alert.url} target="_blank" rel="noopener noreferrer">
+                                View Details
+                              </a>
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>

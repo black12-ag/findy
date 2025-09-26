@@ -1,20 +1,15 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthenticatedRequest } from '@/types';
 import { z } from 'zod';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/error';
 import { sanitizeInput } from '@/utils/security';
 import { logger } from '@/config/logger';
 import { mapsService } from '@/services/maps';
-import { analyticsService } from '@/services/analytics';
+import { analyticsService } from "@/services/analytics-simple";
 import type {
-  PlaceSearchRequest,
-  PlaceDetailsRequest,
-  SavePlaceRequest,
   DeletePlaceRequest,
   GetUserPlacesRequest,
-  PlaceSearchResponse,
-  PlaceDetailsResponse,
-  SavePlaceResponse,
   UserPlacesResponse,
 } from '@/types/api';
 
@@ -49,8 +44,8 @@ const savePlaceSchema = z.object({
  * Search for places using Google Places API
  */
 export const searchPlaces = async (
-  req: Request<{}, PlaceSearchResponse, PlaceSearchRequest>,
-  res: Response<PlaceSearchResponse>
+  req: AuthenticatedRequest,
+  res: Response
 ): Promise<void> => {
   try {
     const { query, location, radius, type } = searchPlacesSchema.parse(req.body);
@@ -85,9 +80,12 @@ export const searchPlaces = async (
 
     res.status(200).json({
       success: true,
-      data: {
-        places,
-        count: places.length,
+      data: places,
+      meta: {
+        page: 1,
+        limit: places.length,
+        total: places.length,
+        totalPages: 1,
       },
     });
   } catch (error) {
@@ -100,8 +98,8 @@ export const searchPlaces = async (
  * Get detailed information about a specific place
  */
 export const getPlaceDetails = async (
-  req: Request<{ placeId: string }, PlaceDetailsResponse, PlaceDetailsRequest>,
-  res: Response<PlaceDetailsResponse>
+  req: AuthenticatedRequest,
+  res: Response
 ): Promise<void> => {
   try {
     const { placeId } = placeDetailsSchema.parse(req.params);
@@ -160,8 +158,8 @@ export const getPlaceDetails = async (
  * Save a place to user's collection
  */
 export const savePlace = async (
-  req: Request<{}, SavePlaceResponse, SavePlaceRequest>,
-  res: Response<SavePlaceResponse>
+  req: AuthenticatedRequest,
+  res: Response
 ): Promise<void> => {
   try {
     const { googlePlaceId, name, address, location, category, isFavorite } = 
@@ -229,7 +227,7 @@ export const savePlace = async (
  * Remove a saved place from user's collection
  */
 export const deletePlace = async (
-  req: Request<{ placeId: string }, {}, DeletePlaceRequest>,
+  req: AuthenticatedRequest & { params: { placeId: string }; body: DeletePlaceRequest },
   res: Response
 ): Promise<void> => {
   try {
@@ -276,7 +274,7 @@ export const deletePlace = async (
  * Get user's saved places
  */
 export const getUserPlaces = async (
-  req: Request<{}, UserPlacesResponse, {}, GetUserPlacesRequest>,
+  req: AuthenticatedRequest & { query: GetUserPlacesRequest },
   res: Response<UserPlacesResponse>
 ): Promise<void> => {
   try {
@@ -303,30 +301,37 @@ export const getUserPlaces = async (
       where.isFavorite = true;
     }
 
-    // Get places with pagination
+    // Get saved places with pagination
     const [places, total] = await Promise.all([
-      prisma.place.findMany({
+      prisma.savedPlace.findMany({
         where,
+        include: {
+          place: true,
+        },
         orderBy: [
-          { isFavorite: 'desc' },
           { createdAt: 'desc' },
         ],
         skip,
         take: limit,
       }),
-      prisma.place.count({ where }),
+      prisma.savedPlace.count({ where }),
     ]);
+
+    // Format places to handle null to undefined conversion and category typing
+    const formattedPlaces = places.map(place => ({
+      ...place,
+      notes: place.notes || undefined,
+      category: place.category as 'HOME' | 'WORK' | 'FAVORITE' | 'RESTAURANT' | 'SHOPPING' | 'ENTERTAINMENT' | 'HEALTH' | 'EDUCATION' | 'OTHER',
+    })) as any[];
 
     res.status(200).json({
       success: true,
-      data: {
-        places,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
+      data: formattedPlaces,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     });
   } catch (error) {
@@ -339,7 +344,7 @@ export const getUserPlaces = async (
  * Toggle favorite status of a saved place
  */
 export const toggleFavorite = async (
-  req: Request<{ placeId: string }>,
+  req: AuthenticatedRequest & { params: { placeId: string } },
   res: Response
 ): Promise<void> => {
   try {

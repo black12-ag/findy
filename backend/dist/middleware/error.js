@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.gracefulShutdown = exports.handleDatabaseConnection = exports.validationError = exports.asyncHandler = exports.notFoundHandler = exports.errorHandler = void 0;
+exports.gracefulShutdown = exports.handleDatabaseConnection = exports.validationError = exports.asyncHandler = exports.notFound = exports.notFoundHandler = exports.errorHandler = void 0;
 const client_1 = require("@prisma/client");
 const zod_1 = require("zod");
 const types_1 = require("@/types");
@@ -138,6 +138,7 @@ const notFoundHandler = (req, res, next) => {
     next(error);
 };
 exports.notFoundHandler = notFoundHandler;
+exports.notFound = exports.notFoundHandler;
 const asyncHandler = (fn) => {
     return (req, res, next) => {
         Promise.resolve(fn(req, res, next)).catch(next);

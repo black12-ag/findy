@@ -1,6 +1,7 @@
 import React from 'react';
 import { geolocationService } from './geolocationService';
 import { storageService } from './storageService';
+import { logger } from '../utils/logger';
 
 export interface LocationPoint {
   latitude: number;
@@ -64,7 +65,7 @@ class BackgroundLocationService {
    */
   async startTracking(purpose: 'navigation' | 'tracking' | 'fitness' | 'work' = 'tracking', name?: string): Promise<boolean> {
     if (this.isTracking) {
-      console.log('[BackgroundLocation] Tracking already active');
+      // Return true if already tracking
       return true;
     }
 
@@ -117,11 +118,12 @@ class BackgroundLocationService {
       await this.registerBackgroundTracking();
 
       this.isTracking = true;
-      console.log('[BackgroundLocation] Tracking started with session ID:', this.currentSession.id);
+      // Log tracking start
+      logger.info('[BackgroundLocation] Tracking started', { sessionId: this.currentSession.id });
       
       return true;
     } catch (error) {
-      console.error('[BackgroundLocation] Failed to start tracking:', error);
+      logger.error('[BackgroundLocation] Failed to start tracking:', error);
       return false;
     }
   }
@@ -163,7 +165,7 @@ class BackgroundLocationService {
     // Unregister background tracking
     await this.unregisterBackgroundTracking();
 
-    console.log('[BackgroundLocation] Tracking stopped. Session saved:', completedSession.id);
+    logger.info('[BackgroundLocation] Tracking stopped', { sessionId: completedSession.id });
     
     return completedSession;
   }
@@ -221,7 +223,7 @@ class BackgroundLocationService {
       }
 
     } catch (error) {
-      console.error('[BackgroundLocation] Failed to track location:', error);
+      logger.error('[BackgroundLocation] Failed to track location:', error);
     }
   }
 
@@ -329,9 +331,9 @@ class BackgroundLocationService {
   private async saveSession(session: TrackingSession): Promise<void> {
     try {
       await storageService.setUserData(`tracking_session_${session.id}`, session, 'high');
-      console.log('[BackgroundLocation] Session saved:', session.id);
+      logger.info('[BackgroundLocation] Session saved', { sessionId: session.id });
     } catch (error) {
-      console.error('[BackgroundLocation] Failed to save session:', error);
+      logger.error('[BackgroundLocation] Failed to save session:', error);
     }
   }
 
@@ -352,7 +354,7 @@ class BackgroundLocationService {
           });
         }
       } catch (error) {
-        console.error('[BackgroundLocation] Failed to register background tracking:', error);
+        logger.error('[BackgroundLocation] Failed to register background tracking:', error);
       }
     }
   }
@@ -371,7 +373,7 @@ class BackgroundLocationService {
           });
         }
       } catch (error) {
-        console.error('[BackgroundLocation] Failed to unregister background tracking:', error);
+        logger.error('[BackgroundLocation] Failed to unregister background tracking:', error);
       }
     }
   }
@@ -397,7 +399,7 @@ class BackgroundLocationService {
       
       return sessions;
     } catch (error) {
-      console.error('[BackgroundLocation] Failed to get sessions:', error);
+      logger.error('[BackgroundLocation] Failed to get sessions:', error);
       return [];
     }
   }
@@ -435,7 +437,7 @@ class BackgroundLocationService {
       await storageService.setUserData(`tracking_session_${sessionId}`, null);
       return true;
     } catch (error) {
-      console.error('[BackgroundLocation] Failed to delete session:', error);
+      logger.error('[BackgroundLocation] Failed to delete session:', error);
       return false;
     }
   }

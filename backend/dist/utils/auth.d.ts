@@ -33,5 +33,18 @@ export declare const validatePasswordStrength: (password: string) => {
 };
 export declare const createSessionFingerprint: (userAgent?: string, ipAddress?: string) => string;
 export declare const hasRole: (userRole: string, requiredRole: string) => boolean;
-export declare const sanitizeUser: (user: User) => User;
+export declare const sanitizeUser: (user: User) => {
+    id: string;
+    email: string;
+    username: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    avatar: string | null;
+    phoneNumber: string | null;
+    isVerified: boolean;
+    isActive: boolean;
+    role: string;
+    createdAt: Date;
+    updatedAt: Date;
+};
 //# sourceMappingURL=auth.d.ts.map

@@ -12,6 +12,9 @@ import { ARNavigationPanel } from './components/ARNavigationPanel';
 import SocialPanel from './components/SocialPanelFixed';
 import { ProfilePanel } from './components/ProfilePanel';
 import { VoiceCommandPanel } from './components/VoiceCommandPanel';
+import { PushNotificationSettings } from './components/PushNotificationSettings';
+import { DeviceIntegrationTest } from './components/DeviceIntegrationTest';
+import CrashReporting from './components/CrashReporting';
 import { SmartNotifications } from './components/SmartNotifications';
 import { ETASharingPanel } from './components/ETASharingPanel';
 import { TransportModeSelector } from './components/TransportModeSelector';
@@ -32,47 +35,49 @@ import { Search, MapPin, User, Target, Mic, Bell, Car, Brain, Trophy } from 'luc
 import { useAuth } from './hooks/useAuth';
 import ErrorBoundary from './components/ErrorBoundary';
 import { LoadingProvider, LoadingOverlay, useLoading } from './contexts/LoadingContext';
+import { DeveloperPanel } from './components/DeveloperPanel';
+import { PlaceDetailsSheet } from './components/PlaceDetailsSheet';
+import AdvancedRouter, { usePageRouter, PageRoute } from './components/AdvancedRouter';
+import { ImageWithFallback } from './components/figma/ImageWithFallback';
+import LoadingSpinner from './components/LoadingSpinner';
+import { NavigationMenu } from './components/NavigationMenu';
+import { Toaster } from './components/ui/sonner';
+import { logger } from './utils/logger';
+import { UserProvider } from './contexts/UserContext';
+import { NavigationProvider, useNavigation } from './contexts/NavigationContext';
+import { useUser } from './contexts/UserContext';
+import { SettingsProvider } from './contexts/SettingsContext';
+import { LocationProvider } from './contexts/LocationContext';
 
-type Screen = 'map' | 'search' | 'route' | 'navigation' | 'saved' | 'settings' | 'transit' | 'offline' | 'ar' | 'social' | 'profile' | 'voice' | 'eta-share' | 'safety' | 'integrations' | 'ai-predictions' | 'analytics' | 'parking' | 'gamification' | 'fleet' | 'api-docs' | 'multi-stop' | 'ors-config';
-type TransportMode = 'driving' | 'walking' | 'transit' | 'cycling';
+import type { Location, Route, TransportMode } from './contexts/NavigationContext';
 
-interface Location {
-  id: string;
-  name: string;
-  address: string;
-  lat: number;
-  lng: number;
-  category?: string;
-}
-
-interface Route {
-  id: string;
-  from: Location;
-  to: Location;
-  distance: string;
-  duration: string;
-  mode: TransportMode;
-  steps: string[];
-}
+type Screen = 'map' | 'search' | 'route' | 'navigation' | 'saved' | 'settings' | 'transit' | 'offline' | 'ar' | 'social' | 'profile' | 'voice' | 'eta-share' | 'safety' | 'integrations' | 'ai-predictions' | 'analytics' | 'parking' | 'gamification' | 'fleet' | 'api-docs' | 'multi-stop' | 'ors-config' | 'developer' | 'place-details' | 'push-settings' | 'device-test' | 'crash-reports';
 
 function AppContent() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { user } = useUser();
+  const {
+    currentLocation,
+    selectedLocation,
+    currentRoute,
+    transportMode,
+    searchQuery,
+    isNavigating,
+    setSelectedLocation,
+    setTransportMode,
+    setSearchQuery,
+    startNavigation,
+    stopNavigation,
+    calculateRoute,
+  } = useNavigation();
+  
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<Screen>('map');
-  const [transportMode, setTransportMode] = useState<TransportMode>('driving');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
-  const [currentRoute, setCurrentRoute] = useState<Route | null>(null);
-  const [isNavigating, setIsNavigating] = useState(false);
   const [showNotifications, setShowNotifications] = useState(true);
   const [centerSignal, setCenterSignal] = useState(0);
-  const [currentLocation] = useState<Location>({
-    id: 'current',
-    name: 'Current Location',
-    address: '123 Main St, San Francisco, CA',
-    lat: 37.7749,
-    lng: -122.4194
-  });
+  const [selectedPlace, setSelectedPlace] = useState<any>(null);
+  const [showPlaceDetails, setShowPlaceDetails] = useState(false);
+  const pageRouter = usePageRouter();
 
   // Check if user has completed onboarding
   useEffect(() => {
@@ -85,42 +90,42 @@ function AppContent() {
     setIsOnboardingComplete(true);
   };
 
-  // Mock data for demonstration
-  const [savedPlaces, setSavedPlaces] = useState<Location[]>([
-    {
-      id: '1',
-      name: 'Home',
-      address: '123 Main St, San Francisco, CA',
-      lat: 37.7749,
-      lng: -122.4194,
-      category: 'home'
-    },
-    {
-      id: '2',
-      name: 'Work',
-      address: '456 Market St, San Francisco, CA',
-      lat: 37.7849,
-      lng: -122.4094,
-      category: 'work'
-    },
-    {
-      id: '3',
-      name: 'Gym',
-      address: '789 Fitness Ave, San Francisco, CA',
-      lat: 37.7649,
-      lng: -122.4294,
-      category: 'gym'
+  // Saved places - loaded from localStorage or API
+  const [savedPlaces, setSavedPlaces] = useState<Location[]>([]);
+
+  // Load saved places on mount
+  useEffect(() => {
+    const loadSavedPlaces = () => {
+      try {
+        const saved = localStorage.getItem('saved_places');
+        if (saved) {
+          setSavedPlaces(JSON.parse(saved));
+        }
+      } catch (error) {
+        logger.error('Failed to load saved places', { error });
+      }
+    };
+    loadSavedPlaces();
+  }, []);
+
+  // Save places to localStorage whenever they change
+  useEffect(() => {
+    if (savedPlaces.length > 0) {
+      localStorage.setItem('saved_places', JSON.stringify(savedPlaces));
     }
-  ]);
+  }, [savedPlaces]);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
-    // Mock search results would be implemented here
-    console.log('Searching for:', query);
+    logger.debug('Search initiated', { query });
+    // Search context will handle the actual search
   };
 
   const handleLocationSelect = (location: Location) => {
+    logger.debug('Location selected', { location });
     setSelectedLocation(location);
+    
+    // Navigate to appropriate screen based on transport mode
     if (transportMode === 'transit') {
       setCurrentScreen('transit');
     } else {
@@ -128,33 +133,34 @@ function AppContent() {
     }
   };
 
-  const startNavigation = (route: Route) => {
-    setCurrentRoute(route);
-    setIsNavigating(true);
+  const handleStartNavigation = (route: Route) => {
+    startNavigation(route);
     setCurrentScreen('navigation');
+    logger.info('Navigation started from App', { route: route.id });
   };
 
-  const stopNavigation = () => {
-    setIsNavigating(false);
-    setCurrentRoute(null);
+  const handleStopNavigation = () => {
+    stopNavigation();
     setCurrentScreen('map');
+    logger.info('Navigation stopped from App');
   };
 
   // Normalize routes coming from different panels to our internal Route type
   const handleStartEnhancedNavigation = (route: any) => {
     const normalized: Route = {
-      id: route.id,
+      id: route.id || `route_${Date.now()}`,
       from: route.from,
       to: route.to,
       distance: route.distance,
       duration: route.duration,
-      // cast mode to our TransportMode if possible
       mode: (['driving','walking','transit','cycling'].includes(route.mode)
         ? route.mode
         : transportMode) as TransportMode,
       steps: route.steps || [],
+      geometry: route.geometry,
+      createdAt: new Date().toISOString(),
     };
-    startNavigation(normalized);
+    handleStartNavigation(normalized);
   };
 
   const handleStartTransitNavigation = (route: any) => {
@@ -164,19 +170,20 @@ function AppContent() {
       return `${line} • ${step.duration}`;
     });
     const normalized: Route = {
-      id: route.id,
+      id: route.id || `transit_route_${Date.now()}`,
       from: route.from,
       to: route.to,
-      distance: route.duration,
+      distance: route.distance || route.duration,
       duration: route.totalTime || route.duration,
       mode: 'transit',
       steps: stepsText,
+      createdAt: new Date().toISOString(),
     };
-    startNavigation(normalized);
+    handleStartNavigation(normalized);
   };
 
   const handleVoiceCommand = (command: string) => {
-    console.log('Processing voice command:', command);
+    logger.debug('Processing voice command', { command });
     // Process voice commands here
     const lowerCommand = command.toLowerCase();
     
@@ -198,7 +205,7 @@ function AppContent() {
   };
 
   const handleNotificationAction = (notification: any) => {
-    console.log('Handling notification action:', notification);
+    logger.debug('Handling notification action', { notification });
     // Handle notification actions here
     if (notification.actionData?.destination === 'work') {
       const workLocation = savedPlaces.find(place => place.category === 'work');
@@ -248,7 +255,7 @@ function AppContent() {
         return (
           <NavigationPanel
             route={currentRoute}
-            onStopNavigation={stopNavigation}
+            onStopNavigation={handleStopNavigation}
             onStartAR={() => setCurrentScreen('ar')}
             onShareETA={() => setCurrentScreen('eta-share')}
           />
@@ -329,6 +336,10 @@ function AppContent() {
             onNavigateToFleet={() => setCurrentScreen('fleet')}
             onNavigateToAPIDocs={() => setCurrentScreen('api-docs')}
             onNavigateToORSConfig={() => setCurrentScreen('ors-config')}
+            onNavigateToDeveloper={() => setCurrentScreen('developer')}
+            onNavigateToPushSettings={() => setCurrentScreen('push-settings')}
+            onNavigateToDeviceTest={() => setCurrentScreen('device-test')}
+            onNavigateToCrashReports={() => setCurrentScreen('crash-reports')}
           />
         );
       case 'safety':
@@ -349,7 +360,25 @@ function AppContent() {
             <AIPredictions
               destination={selectedLocation?.name}
               currentLocation={currentLocation.name}
-              onSuggestionAccept={(suggestion) => console.log('Accepted:', suggestion)}
+              onSuggestionAccept={(suggestion) => {
+                logger.debug('AI suggestion accepted', { suggestion });
+                // Handle different types of AI suggestions
+                if (suggestion.type === 'route') {
+                  // Auto-select suggested route
+                  setTransportMode(suggestion.mode || transportMode);
+                  if (suggestion.destination) {
+                    handleLocationSelect(suggestion.destination);
+                  }
+                } else if (suggestion.type === 'departure') {
+                  // Set departure time suggestion
+                  logger.info('Departure time suggestion accepted', { time: suggestion.time });
+                } else if (suggestion.type === 'place') {
+                  // Navigate to suggested place
+                  if (suggestion.place) {
+                    handleLocationSelect(suggestion.place);
+                  }
+                }
+              }}
             />
             <Button 
               className="mt-4" 
@@ -394,8 +423,22 @@ function AppContent() {
         return (
           <MultiStopRoutePlanner
             onRouteCalculated={(route) => {
-              console.log('Multi-stop route:', route);
-              setCurrentScreen('navigation');
+              logger.debug('Multi-stop route calculated', { route });
+              // Convert to normalized route and start navigation
+              if (route.from && route.to) {
+                const normalizedRoute: Route = {
+                  id: route.id || 'multi-stop-route',
+                  from: route.from,
+                  to: route.to,
+                  distance: route.distance || '0 km',
+                  duration: route.duration || '0 min',
+                  mode: transportMode,
+                  steps: route.steps || [],
+                  waypoints: route.waypoints || [],
+                  createdAt: new Date().toISOString(),
+                };
+                handleStartNavigation(normalizedRoute);
+              }
             }}
             onBack={() => setCurrentScreen('route')}
           />
@@ -405,6 +448,57 @@ function AppContent() {
           <ORSConfigPanel
             onBack={() => setCurrentScreen('settings')}
           />
+        );
+      case 'developer':
+        return (
+          <DeveloperPanel
+            onBack={() => setCurrentScreen('settings')}
+          />
+        );
+      case 'place-details':
+        return selectedPlace ? (
+          <div className="h-full bg-white p-4">
+            <Button 
+              className="mb-4" 
+              onClick={() => setCurrentScreen('map')}
+              variant="outline"
+            >
+              ← Back to Map
+            </Button>
+            <div className="text-center">
+              <h2 className="text-lg font-semibold mb-2">{selectedPlace.name}</h2>
+              <p className="text-gray-600">{selectedPlace.address}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="h-full bg-white flex items-center justify-center">
+            <p className="text-gray-500">No place selected</p>
+          </div>
+        );
+      case 'push-settings':
+        return (
+          <div className="h-full bg-white">
+            <PushNotificationSettings />
+          </div>
+        );
+      case 'device-test':
+        return (
+          <div className="h-full bg-white">
+            <DeviceIntegrationTest />
+          </div>
+        );
+      case 'crash-reports':
+        return (
+          <div className="h-full bg-white p-4">
+            <Button 
+              className="mb-4" 
+              onClick={() => setCurrentScreen('settings')}
+              variant="outline"
+            >
+              ← Back to Settings
+            </Button>
+            <CrashReporting />
+          </div>
         );
       default:
         return (
@@ -425,13 +519,14 @@ function AppContent() {
     return <OnboardingFlow onComplete={completeOnboarding} />;
   }
 
-  // Show login if user isn't authenticated
-  if (!authLoading && !isAuthenticated) {
-    return <LoginScreen onSuccess={() => {
-      // Handle successful login
-      console.log('Login successful');
-    }} />;
-  }
+  // Optional login - users can continue as guest
+  // Commenting out forced authentication to allow guest access
+  // if (!authLoading && !isAuthenticated) {
+  //   return <LoginScreen onSuccess={() => {
+  //     // Handle successful login
+  //     logger.info('Login successful');
+  //   }} />;
+  // }
 
   return (
     <div className="h-screen w-full bg-background flex flex-col relative overflow-hidden">
@@ -476,6 +571,11 @@ function AppContent() {
               >
                 <User className="w-5 h-5" />
               </Button>
+              
+              <NavigationMenu
+                onNavigateToPage={(route, params) => pageRouter.navigateTo(route, params)}
+                onNavigateToScreen={(screen) => setCurrentScreen(screen as Screen)}
+              />
             </div>
           </div>
         </div>
@@ -538,6 +638,33 @@ function AppContent() {
           >
             <Brain className="w-5 h-5" />
           </Button>
+          
+          {/* Demo place details button */}
+          <Button
+            size="icon"
+            className="bg-green-600 text-white shadow-lg hover:bg-green-700"
+            onClick={() => {
+              setSelectedPlace({
+                id: 'demo-place',
+                name: 'Demo Coffee Shop',
+                address: '123 Main St, San Francisco, CA',
+                category: 'restaurant',
+                rating: 4.5,
+                reviewCount: 127,
+                priceLevel: 2,
+                isOpen: true,
+                openHours: 'Open until 9 PM',
+                phone: '(555) 123-4567',
+                website: 'demo-coffee.com',
+                photos: [],
+                amenities: ['WiFi', 'Parking'],
+                reviews: []
+              });
+              setShowPlaceDetails(true);
+            }}
+          >
+            <MapPin className="w-5 h-5" />
+          </Button>
         </div>
       )}
 
@@ -553,6 +680,49 @@ function AppContent() {
           onScreenChange={setCurrentScreen}
         />
       )}
+
+      {/* Place Details Sheet */}
+      <PlaceDetailsSheet
+        place={selectedPlace}
+        isOpen={showPlaceDetails}
+        onClose={() => setShowPlaceDetails(false)}
+        onNavigate={() => {
+          if (selectedPlace && currentLocation) {
+            // Start navigation to selected place
+            const route: Route = {
+              id: 'place-route',
+              from: currentLocation,
+              to: selectedPlace,
+              distance: '2.5 km',
+              duration: '8 min',
+              mode: transportMode,
+              steps: ['Head south on Main St', 'Turn left on Oak Ave'],
+              createdAt: new Date().toISOString(),
+            };
+            handleStartNavigation(route);
+            setShowPlaceDetails(false);
+          }
+        }}
+        onShare={() => {
+          if (selectedPlace && navigator.share) {
+            navigator.share({
+              title: selectedPlace.name,
+              text: `Check out ${selectedPlace.name} - ${selectedPlace.address}`,
+              url: window.location.href
+            });
+          }
+        }}
+      />
+
+      {/* Advanced Router for Page Components */}
+      <AdvancedRouter
+        currentRoute={pageRouter.currentRoute}
+        onNavigateBack={pageRouter.navigateBack}
+        routeParams={pageRouter.routeParams}
+      />
+      
+      {/* Toast notifications */}
+      <Toaster richColors closeButton />
     </div>
   );
 }
@@ -574,12 +744,26 @@ function GlobalLoadingOverlay() {
 export default function App() {
   return (
     <ErrorBoundary onError={(error, errorInfo) => {
-      console.error('App Error:', error);
-      // Could send to analytics service here
+      logger.error('App Error occurred', { error: error.message, stack: error.stack, errorInfo });
+      // Send to analytics service for crash reporting
+      import('./services/analyticsService').then(({ analyticsService }) => {
+        analyticsService.reportCrash(error, 'high', {
+          componentStack: errorInfo.componentStack,
+          type: 'react_error_boundary'
+        });
+      }).catch(console.error);
     }}>
       <LoadingProvider>
-        <AppContent />
-        <GlobalLoadingOverlay />
+        <SettingsProvider>
+          <LocationProvider>
+            <UserProvider>
+              <NavigationProvider>
+                <AppContent />
+                <GlobalLoadingOverlay />
+              </NavigationProvider>
+            </UserProvider>
+          </LocationProvider>
+        </SettingsProvider>
       </LoadingProvider>
     </ErrorBoundary>
   );

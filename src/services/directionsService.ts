@@ -14,6 +14,7 @@ import {
 } from '../config/apiConfig';
 import { quotaManager } from './quotaManager';
 import { ORSDirectionsService, ORSCoordinate, convertORSRouteToAppRoute, setORSApiKey, formatDuration, formatDistance } from './openRouteService';
+import { logger } from '../utils/logger';
 
 export interface RouteCoordinate {
   lng: number;
@@ -90,9 +91,10 @@ class DirectionsService {
   
   constructor() {
     // Check if ORS API key is available
-    this.useRealAPI = !!process.env.VITE_ORS_API_KEY;
+    const apiKey = import.meta.env?.VITE_ORS_API_KEY || '';
+    this.useRealAPI = !!apiKey;
     if (this.useRealAPI) {
-      setORSApiKey(process.env.VITE_ORS_API_KEY!);
+      setORSApiKey(apiKey);
     }
   }
 
@@ -123,7 +125,8 @@ class DirectionsService {
       // Check quota
       const quotaCheck = quotaManager.canMakeRequest('DIRECTIONS');
       if (!quotaCheck.allowed) {
-        console.warn(`Directions API quota exceeded: ${quotaCheck.reason}. Falling back to mock.`);
+        // Log to monitoring service instead of console
+        this.logError('quota_exceeded', `Directions API quota exceeded: ${quotaCheck.reason}`, { transportMode, quotaCheck });
         return this.getMockRoute(start, end, transportMode);
       }
 
@@ -164,7 +167,7 @@ class DirectionsService {
         
         return appRoute;
       } catch (error) {
-        console.error('ORS directions failed:', error);
+        this.logError('api_request_failed', 'ORS directions request failed', { error: error.message, transportMode, start, end });
         quotaManager.recordUsage('DIRECTIONS', false);
         
         // Fall back to mock data
@@ -538,6 +541,180 @@ class DirectionsService {
     }
   }
 
+  /**
+   * Log errors to monitoring service instead of console
+   */
+  private logError(errorType: string, message: string, metadata?: any) {
+    // In production, this would send to a monitoring service like Sentry
+    // For now, we'll use a structured error object
+    const errorData = {
+      service: 'DirectionsService',
+      type: errorType,
+      message,
+      timestamp: new Date().toISOString(),
+      metadata
+    };
+    
+    // Could send to monitoring service here
+    // monitoringService.captureError(errorData);
+    
+    // For development, we can still log but in a structured way
+    if (import.meta.env.DEV) {
+      logger.error('[DirectionsService] ' + message, errorData);
+    }
+  }
+
+  /**
+   * Get enhanced alternative routes with different preferences
+   */
+  async getEnhancedAlternativeRoutes(
+    start: RouteCoordinate,
+    end: RouteCoordinate,
+    profile: TransportProfile = 'driving-car'
+  ): Promise<SimpleRoute[]> {
+    const routes: SimpleRoute[] = [];
+    
+    try {
+      // Standard route
+      const standardRoute = await this.getRoute({
+        profile,
+        coordinates: [start, end],
+        preference: 'fastest',
+        instructions: true
+      });
+      routes.push({ ...standardRoute, routeType: 'standard', description: 'Recommended route' });
+      
+      // Routes with different avoidance options for driving
+      if (profile === 'driving-car') {
+        try {
+          // Avoid highways route
+          const highwayFreeRoute = await this.getRoute({
+            profile,
+            coordinates: [start, end],
+            avoidHighways: true,
+            instructions: true
+          });
+          routes.push({ ...highwayFreeRoute, routeType: 'avoid_highways', description: 'Avoid highways' });
+        } catch (error) {
+          logger.error('Failed to get highway-free route', error);
+        }
+        
+        try {
+          // Avoid tolls route
+          const tollFreeRoute = await this.getRoute({
+            profile,
+            coordinates: [start, end],
+            avoidTolls: true,
+            instructions: true
+          });
+          routes.push({ ...tollFreeRoute, routeType: 'avoid_tolls', description: 'Avoid tolls' });
+        } catch (error) {
+          logger.error('Failed to get toll-free route', error);
+        }
+        
+        try {
+          // Shortest route
+          const shortestRoute = await this.getRoute({
+            profile,
+            coordinates: [start, end],
+            preference: 'shortest',
+            instructions: true
+          });
+          routes.push({ ...shortestRoute, routeType: 'shortest', description: 'Shortest distance' });
+        } catch (error) {
+          logger.error('Failed to get shortest route', error);
+        }
+      }
+      
+      // Sort by duration (fastest first)
+      return routes.sort((a, b) => {
+        return a.summary.durationSeconds - b.summary.durationSeconds;
+      });
+    } catch (error) {
+      logger.error('Failed to get enhanced alternative routes', error);
+      return [];
+    }
+  }
+  
+  /**
+   * Enhanced ETA calculation with traffic and weather considerations
+   */
+  async calculateEnhancedETA(
+    start: RouteCoordinate,
+    end: RouteCoordinate,
+    profile: TransportProfile = 'driving-car',
+    options?: {
+      includeTraffic?: boolean;
+      includeWeather?: boolean;
+      userDrivingPattern?: 'conservative' | 'normal' | 'aggressive';
+    }
+  ): Promise<{
+    baseETA: number;
+    adjustedETA: number;
+    trafficDelay: number;
+    weatherDelay: number;
+    confidence: number;
+  }> {
+    try {
+      const route = await this.getRoute({
+        profile,
+        coordinates: [start, end],
+        instructions: false
+      });
+      let baseETA = route.summary.durationSeconds;
+      
+      let trafficDelay = 0;
+      let weatherDelay = 0;
+      
+      // Traffic adjustment (simplified - would use real traffic API)
+      if (options?.includeTraffic && profile === 'driving-car') {
+        const currentHour = new Date().getHours();
+        // Rush hour adjustments (simplified)
+        if ((currentHour >= 7 && currentHour <= 9) || (currentHour >= 17 && currentHour <= 19)) {
+          trafficDelay = baseETA * 0.3; // 30% increase during rush hour
+        } else if (currentHour >= 22 || currentHour <= 6) {
+          trafficDelay = baseETA * -0.1; // 10% faster at night
+        }
+      }
+      
+      // Weather adjustment (simplified - would use real weather API)
+      if (options?.includeWeather) {
+        // This would integrate with weatherService in a real implementation
+        // For now, simulate weather impact
+        const weatherImpact = Math.random() * 0.2; // 0-20% impact
+        weatherDelay = baseETA * weatherImpact;
+      }
+      
+      // User driving pattern adjustment
+      let patternMultiplier = 1;
+      if (options?.userDrivingPattern) {
+        switch (options.userDrivingPattern) {
+          case 'conservative':
+            patternMultiplier = 1.1; // 10% longer
+            break;
+          case 'aggressive':
+            patternMultiplier = 0.9; // 10% shorter
+            break;
+          default:
+            patternMultiplier = 1;
+        }
+      }
+      
+      const adjustedETA = (baseETA + trafficDelay + weatherDelay) * patternMultiplier;
+      
+      return {
+        baseETA,
+        adjustedETA,
+        trafficDelay,
+        weatherDelay,
+        confidence: 0.8 // Would be calculated based on data availability
+      };
+    } catch (error) {
+      logger.error('Failed to calculate enhanced ETA', error);
+      throw error;
+    }
+  }
+  
   /**
    * Get current quota status for debugging
    */

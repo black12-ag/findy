@@ -67,7 +67,7 @@ export const errorHandler = (
   // Handle Multer errors (file upload)
   else if (error.name === 'MulterError') {
     statusCode = HttpStatus.BAD_REQUEST;
-    switch (error.code) {
+    switch ((error as any).code) {
       case 'LIMIT_FILE_SIZE':
         message = 'File too large';
         break;
@@ -188,6 +188,9 @@ export const notFoundHandler = (req: Request, res: Response, next: NextFunction)
   const error = new AppError(`Route ${req.originalUrl} not found`, HttpStatus.NOT_FOUND);
   next(error);
 };
+
+// Alias for backward compatibility
+export const notFound = notFoundHandler;
 
 /**
  * Async error wrapper for route handlers

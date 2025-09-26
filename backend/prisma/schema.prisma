@@ -1,13 +1,11 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
+// Development SQLite schema - simplified version
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 // User Management
@@ -21,7 +19,7 @@ model User {
   phoneNumber       String?
   isVerified        Boolean  @default(false)
   isActive          Boolean  @default(true)
-  role              UserRole @default(USER)
+  role              String   @default("USER") // simplified enum
   preferences       UserPreferences?
   
   // Authentication
@@ -32,16 +30,13 @@ model User {
   passwordResetExpires DateTime?
   
   // Relationships
+  places            Place[]
   savedPlaces       SavedPlace[]
   routeHistory      Route[]
-  socialPosts       SocialPost[]
-  socialComments    SocialComment[]
-  socialReactions   SocialReaction[]
-  reviews           Review[]
   userSessions      UserSession[]
-  sharedLocations   SharedLocation[]
   friendships       Friendship[] @relation("UserFriendships")
   friendOf          Friendship[] @relation("FriendOf")
+  sharedContent     SharedContent[]
   
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -55,7 +50,7 @@ model UserPreferences {
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Navigation preferences
-  defaultTransportMode TransportMode @default(DRIVING)
+  defaultTransportMode String @default("DRIVING") // simplified enum
   voiceGuidance     Boolean @default(true)
   avoidTolls        Boolean @default(false)
   avoidHighways     Boolean @default(false)
@@ -65,7 +60,7 @@ model UserPreferences {
   mapStyle          String  @default("standard")
   darkMode          Boolean @default(false)
   language          String  @default("en")
-  units             String  @default("metric") // metric or imperial
+  units             String  @default("metric")
   
   // Privacy preferences
   shareLocation     Boolean @default(false)
@@ -83,25 +78,6 @@ model UserPreferences {
   @@map("user_preferences")
 }
 
-model UserSession {
-  id            String   @id @default(cuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token         String   @unique
-  deviceId      String?
-  deviceType    String?
-  ipAddress     String?
-  userAgent     String?
-  isActive      Boolean  @default(true)
-  expiresAt     DateTime
-  lastUsedAt    DateTime @default(now())
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@map("user_sessions")
-}
-
 // Places and Locations
 model Place {
   id            String   @id @default(cuid())
@@ -116,10 +92,14 @@ model Place {
   priceLevel    Int?     // 1-4 scale
   phoneNumber   String?
   website       String?
-  openingHours  Json?
-  photos        String[]
-  amenities     String[]
+  photosJson    String?  // JSON string instead of array
+  amenitiesJson String?  // JSON string instead of array
   isVerified    Boolean  @default(false)
+  
+  // User-specific fields for saved places
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  isFavorite    Boolean  @default(false)
   
   // External IDs
   googlePlaceId String?  @unique
@@ -127,16 +107,12 @@ model Place {
   
   // Relationships
   savedPlaces   SavedPlace[]
-  reviews       Review[]
-  socialPosts   SocialPost[]
   routeWaypoints RouteWaypoint[]
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   @@map("places")
-  @@index([latitude, longitude])
-  @@index([category, subcategory])
 }
 
 model SavedPlace {
@@ -148,7 +124,7 @@ model SavedPlace {
   
   name          String
   notes         String?
-  category      SavedPlaceCategory @default(OTHER)
+  category      String   @default("OTHER") // simplified enum
   isHome        Boolean  @default(false)
   isWork        Boolean  @default(false)
   
@@ -171,26 +147,28 @@ model Route {
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   name              String?
-  transportMode     TransportMode @default(DRIVING)
   startLatitude     Float
   startLongitude    Float
-  startAddress      String
+  startAddress      String?
   endLatitude       Float
   endLongitude      Float
-  endAddress        String
+  endAddress        String?
   
+  transportMode     String   @default("DRIVING") // simplified enum
   distance          Float    // in meters
   duration          Int      // in seconds
-  routeGeometry     Json?    // Polyline or GeoJSON
+  routeGeometryJson String?  // JSON string instead of JSON type
+  
   waypoints         RouteWaypoint[]
   
-  // Route options
+  status            String   @default("PLANNED") // simplified enum
+  
+  // Route preferences
   avoidTolls        Boolean  @default(false)
   avoidHighways     Boolean  @default(false)
   avoidFerries      Boolean  @default(false)
   
-  // Status
-  status            RouteStatus @default(PLANNED)
+  // Timing
   startedAt         DateTime?
   completedAt       DateTime?
   
@@ -198,7 +176,6 @@ model Route {
   updatedAt         DateTime @updatedAt
 
   @@map("routes")
-  @@index([userId, createdAt])
 }
 
 model RouteWaypoint {
@@ -208,74 +185,39 @@ model RouteWaypoint {
   placeId       String?
   place         Place? @relation(fields: [placeId], references: [id], onDelete: SetNull)
   
+  order         Int
   latitude      Float
   longitude     Float
   address       String?
-  order         Int
+  estimatedArrival DateTime?
   
   createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
 
   @@map("route_waypoints")
   @@index([routeId, order])
 }
 
-// Social Features
-model SocialPost {
+// User Session for authentication
+model UserSession {
   id            String   @id @default(cuid())
   userId        String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  placeId       String?
-  place         Place?   @relation(fields: [placeId], references: [id], onDelete: SetNull)
-  
-  content       String?
-  type          PostType @default(CHECK_IN)
-  photos        String[]
-  latitude      Float?
-  longitude     Float?
-  
-  // Relationships
-  comments      SocialComment[]
-  reactions     SocialReaction[]
+  token         String   @unique
+  deviceId      String?
+  deviceType    String?
+  ipAddress     String?
+  userAgent     String?
+  isActive      Boolean  @default(true)
+  expiresAt     DateTime
+  lastUsedAt    DateTime @default(now())
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  @@map("social_posts")
-  @@index([userId, createdAt])
+  @@map("user_sessions")
 }
 
-model SocialComment {
-  id            String @id @default(cuid())
-  postId        String
-  post          SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  userId        String
-  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  content       String
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@map("social_comments")
-}
-
-model SocialReaction {
-  id            String @id @default(cuid())
-  postId        String
-  post          SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  userId        String
-  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  type          ReactionType @default(LIKE)
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@unique([postId, userId])
-  @@map("social_reactions")
-}
-
+// Social Features - Friendship
 model Friendship {
   id            String @id @default(cuid())
   userId        String
@@ -283,7 +225,7 @@ model Friendship {
   friendId      String
   friend        User   @relation("FriendOf", fields: [friendId], references: [id], onDelete: Cascade)
   
-  status        FriendshipStatus @default(PENDING)
+  status        String   @default("PENDING") // PENDING, ACCEPTED, BLOCKED
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -292,98 +234,26 @@ model Friendship {
   @@map("friendships")
 }
 
-model Review {
-  id            String @id @default(cuid())
-  userId        String
-  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  placeId       String
-  place         Place  @relation(fields: [placeId], references: [id], onDelete: Cascade)
-  
-  rating        Float  // 1-5 scale
-  content       String?
-  photos        String[]
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@unique([userId, placeId])
-  @@map("reviews")
-}
-
-// Real-time Features
-model SharedLocation {
+// Shared Content
+model SharedContent {
   id            String   @id @default(cuid())
   userId        String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  latitude      Float
-  longitude     Float
-  accuracy      Float?
-  heading       Float?
-  speed         Float?
+  type          String   // 'route' | 'place' | 'location'
+  itemId        String   // route ID or place ID
   
-  isActive      Boolean  @default(true)
-  expiresAt     DateTime?
+  title         String?
+  message       String?
+  recipientsJson String? // JSON array of user IDs
+  isPublic      Boolean  @default(false)
+  
   shareToken    String   @unique
+  expiresAt     DateTime?
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  @@map("shared_locations")
-  @@index([userId, isActive])
-}
-
-// Enums
-enum UserRole {
-  USER
-  ADMIN
-  MODERATOR
-}
-
-enum TransportMode {
-  DRIVING
-  WALKING
-  TRANSIT
-  CYCLING
-}
-
-enum SavedPlaceCategory {
-  HOME
-  WORK
-  FAVORITE
-  RESTAURANT
-  SHOPPING
-  ENTERTAINMENT
-  HEALTH
-  EDUCATION
-  OTHER
-}
-
-enum RouteStatus {
-  PLANNED
-  ACTIVE
-  COMPLETED
-  CANCELLED
-}
-
-enum PostType {
-  CHECK_IN
-  REVIEW
-  PHOTO
-  TIP
-  INCIDENT
-}
-
-enum ReactionType {
-  LIKE
-  LOVE
-  LAUGH
-  ANGRY
-  SAD
-}
-
-enum FriendshipStatus {
-  PENDING
-  ACCEPTED
-  BLOCKED
+  @@map("shared_content")
+  @@index([userId, type])
 }

@@ -53,7 +53,8 @@ export const authenticate = async (
     
     next();
   } catch (error) {
-    logger.error('Authentication failed', { error: error.message });
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error('Authentication failed', { error: message });
     next(error);
   }
 };
@@ -92,7 +93,8 @@ export const optionalAuthenticate = async (
     next();
   } catch (error) {
     // Don't fail - just continue without user
-    logger.debug('Optional authentication failed', { error: error.message });
+    const message = error instanceof Error ? error.message : String(error);
+    logger.debug('Optional authentication failed', { error: message });
     next();
   }
 };
@@ -191,13 +193,13 @@ export const userRateLimit = (maxRequests: number = 100, windowMs: number = 15 *
 
   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
     try {
-      const userId = req.user?.id || req.ip;
+      const userId = (req.user?.id ?? req.ip) as string;
       const now = Date.now();
       
-      const userRequests = requests.get(userId);
+      const userRequests = requests.get(String(userId));
       
       if (!userRequests || now > userRequests.resetTime) {
-        requests.set(userId, {
+        requests.set(String(userId), {
           count: 1,
           resetTime: now + windowMs,
         });

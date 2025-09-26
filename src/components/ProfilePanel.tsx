@@ -21,7 +21,9 @@ import {
   CheckCircle,
   Shield,
   Activity,
-  Trophy
+  Trophy,
+  LogIn,
+  UserPlus
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -30,6 +32,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
+import { useUser } from '../contexts/UserContext';
+import { logger } from '../utils/logger';
+import { profileEditSchema, validateForm } from '../utils/validation';
+import { toast } from 'sonner';
 
 interface ProfilePanelProps {
   onBack: () => void;
@@ -62,6 +68,7 @@ interface Achievement {
 }
 
 export function ProfilePanel({ onBack, onOpenSettings, onOpenSafety, onOpenAnalytics, onOpenGamification }: ProfilePanelProps) {
+  const { isAuthenticated, user, updateProfile, logout } = useUser();
   const [activeTab, setActiveTab] = useState('overview');
   const [editOpen, setEditOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
@@ -69,32 +76,45 @@ export function ProfilePanel({ onBack, onOpenSettings, onOpenSafety, onOpenAnaly
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [showGuestLoginPrompt, setShowGuestLoginPrompt] = useState(false);
+  const [profileErrors, setProfileErrors] = useState<{[key: string]: string}>({});
   
-  // Mock user data
-  const [userProfile, setUserProfile] = useState({
-    name: 'Alex Thompson',
-    email: 'alex.thompson@email.com',
-    level: 'Navigator Pro',
-    levelProgress: 75,
-    nextLevel: 'Road Master',
-    pointsToNext: 160,
-    totalPoints: 8540,
-    memberSince: 'January 2023',
-    avatar: 'AT',
-    verifiedContributor: true
+  // User profile state - derived from UserContext
+  const [userProfile, setUserProfile] = useState(() => {
+    if (isAuthenticated && user) {
+      const displayName = user.firstName && user.lastName 
+        ? `${user.firstName} ${user.lastName}`
+        : user.username || user.email.split('@')[0];
+      
+      return {
+        name: displayName,
+        email: user.email,
+        level: 'Navigator Pro',
+        levelProgress: 75,
+        nextLevel: 'Road Master', 
+        pointsToNext: 160,
+        totalPoints: 8540,
+        memberSince: new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        avatar: displayName.split(' ').map(n => n[0]).join('').toUpperCase(),
+        verifiedContributor: user.isVerified
+      };
+    } else {
+      return {
+        name: 'Guest User',
+        email: '',
+        level: 'Explorer',
+        levelProgress: 0,
+        nextLevel: 'Navigator',
+        pointsToNext: 100,
+        totalPoints: 0,
+        memberSince: 'Guest Mode',
+        avatar: 'GU',
+        verifiedContributor: false
+      };
+    }
   });
 
-  const userStats: UserStats = {
-    totalTrips: 247,
-    totalDistance: '1,240 mi',
-    totalTime: '52 hours',
-    co2Saved: '89 kg',
-    placesVisited: 156,
-    reviewsWritten: 34,
-    photosShared: 67,
-    incidentsReported: 23
-  };
-
+  // Define achievements data first (before it's used)
   const achievements: Achievement[] = [
     {
       id: '1',
@@ -148,6 +168,60 @@ export function ProfilePanel({ onBack, onOpenSettings, onOpenSafety, onOpenAnaly
       maxProgress: 50
     }
   ];
+
+  // Calculate user level and progress from achievements
+  const calculateUserLevel = (earnedAchievements: Achievement[]) => {
+    const earnedCount = earnedAchievements.filter(a => a.earned).length;
+    const totalProgress = earnedAchievements.reduce((sum, a) => {
+      return sum + (a.earned ? 100 : (a.progress || 0));
+    }, 0);
+    const maxProgress = earnedAchievements.length * 100;
+    const overallProgress = (totalProgress / maxProgress) * 100;
+    
+    if (earnedCount >= 5) return { level: 'Road Master', progress: Math.min(overallProgress, 95), nextLevel: 'Navigation Legend', pointsToNext: 50 };
+    if (earnedCount >= 3) return { level: 'Navigator Pro', progress: overallProgress, nextLevel: 'Road Master', pointsToNext: 160 };
+    if (earnedCount >= 1) return { level: 'Explorer', progress: overallProgress, nextLevel: 'Navigator Pro', pointsToNext: 300 };
+    return { level: 'Beginner', progress: overallProgress, nextLevel: 'Explorer', pointsToNext: 500 };
+  };
+
+  // Update profile when user changes
+  React.useEffect(() => {
+    if (isAuthenticated && user) {
+      const displayName = user.firstName && user.lastName 
+        ? `${user.firstName} ${user.lastName}`
+        : user.username || user.email.split('@')[0];
+      
+      const levelData = calculateUserLevel(achievements);
+      const totalPoints = achievements.reduce((sum, a) => {
+        return sum + (a.earned ? 200 : Math.floor((a.progress || 0) * 2));
+      }, 1540); // Base points
+      
+      setUserProfile({
+        name: displayName,
+        email: user.email,
+        level: levelData.level,
+        levelProgress: Math.round(levelData.progress),
+        nextLevel: levelData.nextLevel,
+        pointsToNext: levelData.pointsToNext,
+        totalPoints,
+        memberSince: new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        avatar: displayName.split(' ').map(n => n[0]).join('').toUpperCase(),
+        verifiedContributor: user.isVerified
+      });
+    }
+  }, [user, isAuthenticated, achievements]);
+
+  const userStats: UserStats = {
+    totalTrips: 247,
+    totalDistance: '1,240 mi',
+    totalTime: '52 hours',
+    co2Saved: '89 kg',
+    placesVisited: 156,
+    reviewsWritten: 34,
+    photosShared: 67,
+    incidentsReported: 23
+  };
+
 
   const recentActivity = [
     {
@@ -210,8 +284,11 @@ export function ProfilePanel({ onBack, onOpenSettings, onOpenSafety, onOpenAnaly
             <p className="text-sm text-gray-500">Manage your account and view stats</p>
           </div>
           <Button variant="ghost" size="icon" onClick={() => {
-            if (onOpenSettings) onOpenSettings();
-            else alert('Open Settings');
+            if (onOpenSettings) {
+              onOpenSettings();
+            } else {
+              logger.debug('Settings panel not available');
+            }
           }}>
             <Settings className="w-4 h-4" />
           </Button>
@@ -321,7 +398,7 @@ export function ProfilePanel({ onBack, onOpenSettings, onOpenSafety, onOpenAnaly
                         await navigator.clipboard.writeText(shareData.url);
                         setShareOpen(true);
                       } else {
-                        alert('Share URL copied:\n' + shareData.url);
+                        logger.info('Profile URL copied to share');
                       }
                     }}
                   >
@@ -392,6 +469,37 @@ export function ProfilePanel({ onBack, onOpenSettings, onOpenSafety, onOpenAnaly
                   )}
                 </div>
               </Card>
+
+              {/* Guest Login Prompt */}
+              {!isAuthenticated && (
+                <Card className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <UserPlus className="w-8 h-8 text-blue-600" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-2">Sign in for Full Experience</h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Create an account to save your preferences, sync across devices, and unlock advanced features.
+                    </p>
+                    <div className="flex gap-2 justify-center">
+                      <Button
+                        className="bg-blue-600 hover:bg-blue-700"
+                        onClick={() => setShowGuestLoginPrompt(true)}
+                      >
+                        <LogIn className="w-4 h-4 mr-2" />
+                        Sign In
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowGuestLoginPrompt(true)}
+                      >
+                        <UserPlus className="w-4 h-4 mr-2" />
+                        Sign Up
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              )}
 
               {/* Travel Statistics */}
               <Card className="p-4">
@@ -618,9 +726,9 @@ export function ProfilePanel({ onBack, onOpenSettings, onOpenSafety, onOpenAnaly
                   level: data.profile.level ?? p.level,
                 }));
               }
-              alert('Import successful');
-            } catch {
-              alert('Invalid file');
+              logger.success('Profile data imported successfully');
+            } catch (error) {
+              logger.error('Invalid import file', { error });
             }
           };
           reader.readAsText(file);
@@ -636,22 +744,83 @@ export function ProfilePanel({ onBack, onOpenSettings, onOpenSafety, onOpenAnaly
             <DialogDescription>Update your personal information.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Input
-              placeholder="Name"
-              value={userProfile.name}
-              onChange={(e) => setUserProfile((p) => ({ ...p, name: e.target.value }))}
-            />
-            <Input
-              placeholder="Email"
-              type="email"
-              value={userProfile.email}
-              onChange={(e) => setUserProfile((p) => ({ ...p, email: e.target.value }))}
-            />
+            <div>
+              <Input
+                placeholder="Name"
+                value={userProfile.name}
+                onChange={(e) => {
+                  setUserProfile((p) => ({ ...p, name: e.target.value }));
+                  if (profileErrors.name) {
+                    setProfileErrors((prev) => ({ ...prev, name: '' }));
+                  }
+                }}
+                className={profileErrors.name ? 'border-red-300 focus:border-red-500' : ''}
+              />
+              {profileErrors.name && (
+                <p className="text-red-600 text-sm mt-1">{profileErrors.name}</p>
+              )}
+            </div>
+            
+            <div>
+              <Input
+                placeholder="Email"
+                type="email"
+                value={userProfile.email}
+                onChange={(e) => {
+                  setUserProfile((p) => ({ ...p, email: e.target.value }));
+                  if (profileErrors.email) {
+                    setProfileErrors((prev) => ({ ...prev, email: '' }));
+                  }
+                }}
+                className={profileErrors.email ? 'border-red-300 focus:border-red-500' : ''}
+              />
+              {profileErrors.email && (
+                <p className="text-red-600 text-sm mt-1">{profileErrors.email}</p>
+              )}
+            </div>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setEditOpen(false)}>Cancel</Button>
-              <Button onClick={() => {
-                setEditOpen(false);
-                setUserProfile((p) => ({ ...p, name: userProfile.name, email: userProfile.email }));
+              <Button onClick={async () => {
+                try {
+                  // Validate profile data
+                  const validationResult = validateForm({
+                    name: userProfile.name,
+                    email: userProfile.email
+                  }, profileEditSchema);
+
+                  if (!validationResult.isValid) {
+                    setProfileErrors(validationResult.errors);
+                    const firstError = Object.values(validationResult.errors)[0];
+                    toast.error(firstError);
+                    return;
+                  }
+
+                  setProfileErrors({});
+                  
+                  if (isAuthenticated && user) {
+                    // Parse name into first/last if possible
+                    const nameParts = userProfile.name.trim().split(' ');
+                    const firstName = nameParts[0] || '';
+                    const lastName = nameParts.slice(1).join(' ') || '';
+                    
+                    await updateProfile({
+                      firstName,
+                      lastName,
+                      email: userProfile.email,
+                    });
+                    
+                    logger.success('Profile updated successfully');
+                    toast.success('Profile updated successfully');
+                  } else {
+                    // For guest users, just update local state
+                    logger.info('Profile updated locally (guest mode)');
+                    toast.success('Profile updated locally');
+                  }
+                  setEditOpen(false);
+                } catch (error) {
+                  logger.error('Failed to update profile', { error });
+                  toast.error('Failed to update profile. Please try again.');
+                }
               }}>Save</Button>
             </div>
           </div>
@@ -702,6 +871,69 @@ export function ProfilePanel({ onBack, onOpenSettings, onOpenSafety, onOpenAnaly
           </div>
           <div className="flex justify-end">
             <Button onClick={() => setActivityOpen(false)}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Guest Login Dialog */}
+      <Dialog open={showGuestLoginPrompt} onOpenChange={setShowGuestLoginPrompt}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sign in to your account</DialogTitle>
+            <DialogDescription>
+              Create an account or sign in to save your preferences, sync data across devices, and access premium features.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-4 bg-blue-50 rounded-lg">
+              <h4 className="font-medium text-blue-900 mb-2">✨ Benefits of signing in:</h4>
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li>• Save favorite places and routes</li>
+                <li>• Sync settings across all devices</li>
+                <li>• Track your travel statistics</li>
+                <li>• Unlock achievement system</li>
+                <li>• Access offline maps</li>
+                <li>• Priority customer support</li>
+              </ul>
+            </div>
+            
+            <div className="p-4 bg-green-50 rounded-lg text-center">
+              <p className="text-sm text-green-800 mb-3">
+                🎉 <strong>Good news!</strong> You can continue using the app as a guest. 
+                All core navigation features are available without an account.
+              </p>
+              <Button variant="ghost" onClick={() => setShowGuestLoginPrompt(false)}>
+                Continue as Guest
+              </Button>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                className="flex-1 bg-blue-600 hover:bg-blue-700" 
+                onClick={() => {
+                  setShowGuestLoginPrompt(false);
+                  logger.info('Sign in requested - redirecting to login');
+                  // Navigate to login screen
+                  window.dispatchEvent(new CustomEvent('navigate-to-login'));
+                }}
+              >
+                <LogIn className="w-4 h-4 mr-2" />
+                Sign In
+              </Button>
+              <Button 
+                variant="outline" 
+                className="flex-1" 
+                onClick={() => {
+                  setShowGuestLoginPrompt(false);
+                  logger.info('Sign up requested - redirecting to registration');
+                  // Navigate to registration screen
+                  window.dispatchEvent(new CustomEvent('navigate-to-register'));
+                }}
+              >
+                <UserPlus className="w-4 h-4 mr-2" />
+                Create Account
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

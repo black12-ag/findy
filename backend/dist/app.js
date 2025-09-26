@@ -9,17 +9,25 @@ const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const compression_1 = __importDefault(require("compression"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
+const passport_1 = __importDefault(require("passport"));
+const express_session_1 = __importDefault(require("express-session"));
 const env_1 = require("@/config/env");
 const logger_1 = require("@/config/logger");
 const database_1 = require("@/config/database");
 const redis_1 = require("@/config/redis");
 const error_1 = require("@/middleware/error");
+const oauth_1 = require("@/config/oauth");
+const sentry_simple_1 = require("@/config/sentry-simple");
+const swagger_1 = require("@/config/swagger");
 const auth_1 = __importDefault(require("@/routes/auth"));
 const places_1 = __importDefault(require("@/routes/places"));
 const routes_1 = __importDefault(require("@/routes/routes"));
 const users_1 = __importDefault(require("@/routes/users"));
 const social_1 = __importDefault(require("@/routes/social"));
 const app = (0, express_1.default)();
+(0, sentry_simple_1.initSentry)();
+app.use(sentry_simple_1.sentryRequestHandler);
+app.use(sentry_simple_1.sentryTracingHandler);
 app.set('trust proxy', 1);
 app.use((0, helmet_1.default)({
     contentSecurityPolicy: {
@@ -76,9 +84,21 @@ const limiter = (0, express_rate_limit_1.default)({
     },
 });
 app.use(limiter);
+app.use((0, express_session_1.default)({
+    secret: process.env.SESSION_SECRET || 'pathfinder-session-secret',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: env_1.config.node.env === 'production',
+        maxAge: 24 * 60 * 60 * 1000,
+    },
+}));
+app.use(passport_1.default.initialize());
+app.use(passport_1.default.session());
+(0, oauth_1.initializeOAuth)();
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ extended: true, limit: '10mb' }));
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
     logger_1.logger.info('HTTP Request', {
         method: req.method,
         url: req.url,
@@ -87,7 +107,7 @@ app.use((req, res, next) => {
     });
     next();
 });
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
     res.status(200).json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
@@ -100,7 +120,8 @@ app.use('/api/v1/places', places_1.default);
 app.use('/api/v1/routes', routes_1.default);
 app.use('/api/v1/users', users_1.default);
 app.use('/api/v1/social', social_1.default);
-app.get('/api/v1', (req, res) => {
+(0, swagger_1.setupSwagger)(app);
+app.get('/api/v1', (_req, res) => {
     res.json({
         name: 'PathFinder Pro API',
         version: '1.0.0',
@@ -116,6 +137,7 @@ app.get('/api/v1', (req, res) => {
     });
 });
 app.use(error_1.notFound);
+app.use(sentry_simple_1.sentryErrorHandler);
 app.use(error_1.errorHandler);
 const gracefulShutdown = async (signal) => {
     logger_1.logger.info(`Received ${signal}. Starting graceful shutdown...`);

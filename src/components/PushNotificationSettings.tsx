@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { usePushNotifications } from '../services/pushNotificationService';
 import './PushNotificationSettings.css';
+import { logger } from '../utils/logger';
+import { toast } from 'sonner';
 
 export const PushNotificationSettings: React.FC = () => {
   const {
@@ -31,7 +33,7 @@ export const PushNotificationSettings: React.FC = () => {
       try {
         setNotificationTypes(JSON.parse(savedPrefs));
       } catch (error) {
-        console.error('Failed to parse notification preferences:', error);
+        logger.error('Failed to parse notification preferences', { error });
       }
     }
   }, []);
@@ -43,7 +45,7 @@ export const PushNotificationSettings: React.FC = () => {
 
   const handleRequestPermission = async () => {
     if (!isSupported) {
-      alert('Push notifications are not supported in this browser.');
+      toast.error('Push notifications are not supported in this browser.');
       return;
     }
 
@@ -51,11 +53,13 @@ export const PushNotificationSettings: React.FC = () => {
     try {
       const result = await requestPermission();
       if (result === 'denied') {
-        alert('Notification permission was denied. You can enable it in your browser settings.');
+        toast.error('Notification permission was denied. You can enable it in your browser settings.');
+      } else if (result === 'granted') {
+        toast.success('Notification permission granted!');
       }
     } catch (error) {
-      console.error('Failed to request permission:', error);
-      alert('Failed to request notification permission. Please try again.');
+      logger.error('Failed to request permission', { error });
+      toast.error('Failed to request notification permission. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -65,9 +69,10 @@ export const PushNotificationSettings: React.FC = () => {
     setIsLoading(true);
     try {
       await subscribe();
+      toast.success('Successfully subscribed to push notifications!');
     } catch (error) {
-      console.error('Failed to subscribe:', error);
-      alert('Failed to subscribe to push notifications. Please try again.');
+      logger.error('Failed to subscribe', { error });
+      toast.error('Failed to subscribe to push notifications. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -78,11 +83,11 @@ export const PushNotificationSettings: React.FC = () => {
     try {
       const result = await unsubscribe();
       if (result) {
-        alert('Successfully unsubscribed from push notifications.');
+        toast.success('Successfully unsubscribed from push notifications.');
       }
     } catch (error) {
-      console.error('Failed to unsubscribe:', error);
-      alert('Failed to unsubscribe. Please try again.');
+      logger.error('Failed to unsubscribe', { error });
+      toast.error('Failed to unsubscribe. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -96,9 +101,10 @@ export const PushNotificationSettings: React.FC = () => {
         tag: 'test',
         data: { test: true }
       });
+      toast.success('Test notification sent!');
     } catch (error) {
-      console.error('Failed to show test notification:', error);
-      alert('Failed to show test notification. Make sure notifications are enabled.');
+      logger.error('Failed to show test notification', { error });
+      toast.error('Failed to show test notification. Make sure notifications are enabled.');
     }
   };
 
@@ -108,9 +114,10 @@ export const PushNotificationSettings: React.FC = () => {
         delay: 15,
         location: 'Main Street'
       });
+      toast.success('Navigation alert sent!');
     } catch (error) {
-      console.error('Failed to show navigation alert:', error);
-      alert('Failed to show navigation alert. Make sure notifications are enabled.');
+      logger.error('Failed to show navigation alert', { error });
+      toast.error('Failed to show navigation alert. Make sure notifications are enabled.');
     }
   };
 

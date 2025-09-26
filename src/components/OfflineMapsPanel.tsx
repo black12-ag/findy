@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, 
   Download, 
@@ -19,19 +19,10 @@ import { Progress } from './ui/progress';
 import { Switch } from './ui/switch';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { offlineMapsService, OfflineRegion, StorageInfo } from '../services/offlineMapsService';
+import { enhancedOfflineMapsService, EnhancedOfflineRoute, StorageQuotaInfo, DownloadStrategy } from '../services/enhancedOfflineMapsService';
 
-interface OfflineMap {
-  id: string;
-  name: string;
-  region: string;
-  size: string;
-  downloadDate: string;
-  lastUpdated: string;
-  quality: 'basic' | 'detailed';
-  status: 'downloaded' | 'downloading' | 'updating' | 'error';
-  progress?: number;
-  coverage: string;
-}
+// Using OfflineRegion from offlineMapsService
 
 interface OfflineMapsPanelProps {
   onBack: () => void;
@@ -41,131 +32,173 @@ export function OfflineMapsPanel({ onBack }: OfflineMapsPanelProps) {
   const [activeTab, setActiveTab] = useState('downloaded');
   const [autoUpdate, setAutoUpdate] = useState(true);
   const [wifiOnly, setWifiOnly] = useState(true);
-  const [storageUsed] = useState(2.4); // GB
-  const [storageLimit] = useState(5.0); // GB
+  const [offlineRegions, setOfflineRegions] = useState<OfflineRegion[]>([]);
+  const [storageInfo, setStorageInfo] = useState<StorageInfo>({
+    totalUsed: 0,
+    totalAvailable: 0,
+    tilesCount: 0,
+    regionsCount: 0,
+    routesCount: 0
+  });
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<{[key: string]: number}>({});
 
-  // Mock offline maps data
-  const [offlineMaps, setOfflineMaps] = useState<OfflineMap[]>([
-    {
-      id: '1',
+  // Available regions for download
+  const availableRegions = [
+    { 
+      id: 'sf-bay-area',
       name: 'San Francisco Bay Area',
-      region: 'California, USA',
+      region: 'California',
+      bounds: { north: 37.9, south: 37.6, east: -122.2, west: -122.6 },
+      center: { lat: 37.7749, lng: -122.4194 },
       size: '486 MB',
-      downloadDate: '2024-01-15',
-      lastUpdated: '2024-01-20',
-      quality: 'detailed',
-      status: 'downloaded',
       coverage: '50 mi radius'
     },
-    {
-      id: '2',
+    { 
+      id: 'nyc',
       name: 'New York City',
-      region: 'New York, USA',
+      region: 'New York',
+      bounds: { north: 40.9, south: 40.5, east: -73.7, west: -74.3 },
+      center: { lat: 40.7128, lng: -74.0060 },
       size: '652 MB',
-      downloadDate: '2024-01-10',
-      lastUpdated: '2024-01-18',
-      quality: 'detailed',
-      status: 'downloaded',
       coverage: 'All 5 boroughs'
     },
-    {
-      id: '3',
+    { 
+      id: 'la-metro',
       name: 'Los Angeles Metro',
-      region: 'California, USA',
+      region: 'California',
+      bounds: { north: 34.3, south: 33.9, east: -117.9, west: -118.5 },
+      center: { lat: 34.0522, lng: -118.2437 },
       size: '324 MB',
-      downloadDate: '2024-01-12',
-      lastUpdated: '2024-01-19',
-      quality: 'basic',
-      status: 'updating',
-      progress: 65,
       coverage: '30 mi radius'
+    },
+    { 
+      id: 'chicago',
+      name: 'Chicago',
+      region: 'Illinois',
+      bounds: { north: 42.0, south: 41.6, east: -87.5, west: -87.9 },
+      center: { lat: 41.8781, lng: -87.6298 },
+      size: '445 MB',
+      coverage: 'Metro area'
     }
-  ]);
-
-  // Mock available regions
-  const availableRegions = [
-    { id: '4', name: 'Chicago', region: 'Illinois, USA', size: '445 MB', coverage: 'Metro area' },
-    { id: '5', name: 'Seattle', region: 'Washington, USA', size: '298 MB', coverage: '25 mi radius' },
-    { id: '6', name: 'Boston', region: 'Massachusetts, USA', size: '267 MB', coverage: 'Greater Boston' },
-    { id: '7', name: 'Austin', region: 'Texas, USA', size: '189 MB', coverage: 'City limits' },
   ];
 
-  const handleDownload = (regionId: string) => {
-    const region = availableRegions.find(r => r.id === regionId);
-    if (region) {
-      const newMap: OfflineMap = {
-        id: regionId,
-        name: region.name,
-        region: region.region,
-        size: region.size,
-        downloadDate: new Date().toISOString().split('T')[0],
-        lastUpdated: new Date().toISOString().split('T')[0],
-        quality: 'detailed',
-        status: 'downloading',
-        progress: 0,
-        coverage: region.coverage
-      };
-      setOfflineMaps(prev => [...prev, newMap]);
-      
-      // Simulate download progress
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += Math.random() * 15;
-        if (progress >= 100) {
-          progress = 100;
-          clearInterval(interval);
-          setOfflineMaps(prev => prev.map(map => 
-            map.id === regionId 
-              ? { ...map, status: 'downloaded', progress: undefined }
-              : map
-          ));
-        } else {
-          setOfflineMaps(prev => prev.map(map => 
-            map.id === regionId 
-              ? { ...map, progress }
-              : map
-          ));
-        }
-      }, 500);
+  // Initialize service and load data
+  useEffect(() => {
+    initializeOfflineMaps();
+  }, []);
+
+  const initializeOfflineMaps = async () => {
+    try {
+      // Initialize both basic and enhanced services
+      await Promise.all([
+        offlineMapsService.initialize(),
+        enhancedOfflineMapsService.initialize()
+      ]);
+      await loadData();
+      setIsInitialized(true);
+    } catch (error) {
+      console.error('Failed to initialize offline maps:', error);
     }
   };
 
-  const handleDelete = (mapId: string) => {
-    setOfflineMaps(prev => prev.filter(map => map.id !== mapId));
+  const loadData = async () => {
+    try {
+      const [regions, storage] = await Promise.all([
+        offlineMapsService.getOfflineRegions(),
+        offlineMapsService.getStorageInfo()
+      ]);
+      setOfflineRegions(regions);
+      setStorageInfo(storage);
+    } catch (error) {
+      console.error('Failed to load offline maps data:', error);
+    }
   };
 
-  const handleUpdate = (mapId: string) => {
-    setOfflineMaps(prev => prev.map(map => 
-      map.id === mapId 
-        ? { ...map, status: 'updating', progress: 0 }
-        : map
-    ));
-    
-    // Simulate update progress
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += Math.random() * 12;
-      if (progress >= 100) {
-        progress = 100;
-        clearInterval(interval);
-        setOfflineMaps(prev => prev.map(map => 
-          map.id === mapId 
-            ? { 
-                ...map, 
-                status: 'downloaded', 
-                progress: undefined,
-                lastUpdated: new Date().toISOString().split('T')[0]
-              }
-            : map
-        ));
-      } else {
-        setOfflineMaps(prev => prev.map(map => 
-          map.id === mapId 
-            ? { ...map, progress }
-            : map
-        ));
+  const handleDownloadMap = async (regionId: string) => {
+    const region = availableRegions.find(r => r.id === regionId);
+    if (!region) return;
+
+    setIsDownloading(true);
+    try {
+      const downloadId = await offlineMapsService.downloadRegion(
+        {
+          name: region.name,
+          bounds: region.bounds,
+          center: region.center,
+          minZoom: 10,
+          maxZoom: 16,
+          mapProvider: 'osm'
+        },
+        (progress, downloaded, total) => {
+          setDownloadProgress(prev => ({
+            ...prev,
+            [region.name]: progress
+          }));
+        }
+      );
+
+      // Refresh data after starting download
+      await loadData();
+    } catch (error) {
+      console.error('Failed to start download:', error);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleDeleteMap = async (regionId: string) => {
+    setIsDownloading(true);
+    try {
+      await offlineMapsService.deleteOfflineRegion(regionId);
+      await loadData();
+    } catch (error) {
+      console.error('Failed to delete region:', error);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleUpdateMap = async (regionId: string) => {
+    // For updates, we would re-download the region
+    // This is a simplified implementation
+    setIsDownloading(true);
+    try {
+      const region = offlineRegions.find(r => r.id === regionId);
+      if (region) {
+        await offlineMapsService.downloadRegion(
+          {
+            name: region.name,
+            bounds: region.bounds,
+            center: region.center,
+            minZoom: region.minZoom,
+            maxZoom: region.maxZoom,
+            mapProvider: region.mapProvider
+          },
+          (progress) => {
+            setDownloadProgress(prev => ({
+              ...prev,
+              [region.name]: progress
+            }));
+          }
+        );
+        await loadData();
       }
-    }, 400);
+    } catch (error) {
+      console.error('Failed to update region:', error);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleClearAllData = async () => {
+    try {
+      await offlineMapsService.clearAllData();
+      await loadData();
+    } catch (error) {
+      console.error('Failed to clear data:', error);
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -214,9 +247,11 @@ export function OfflineMapsPanel({ onBack }: OfflineMapsPanelProps) {
           <div className="flex-1">
             <div className="flex items-center justify-between mb-1">
               <span className="font-medium text-gray-900">Storage Used</span>
-              <span className="text-sm text-gray-600">{storageUsed} GB of {storageLimit} GB</span>
+              <span className="text-sm text-gray-600">
+                {(storageInfo.totalUsed / (1024 * 1024 * 1024)).toFixed(1)} GB of {(storageInfo.totalAvailable / (1024 * 1024 * 1024)).toFixed(1)} GB
+              </span>
             </div>
-            <Progress value={(storageUsed / storageLimit) * 100} className="h-2" />
+            <Progress value={storageInfo.totalAvailable > 0 ? (storageInfo.totalUsed / storageInfo.totalAvailable) * 100 : 0} className="h-2" />
           </div>
         </div>
         
@@ -248,7 +283,7 @@ export function OfflineMapsPanel({ onBack }: OfflineMapsPanelProps) {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col mt-4">
         <div className="flex-shrink-0 px-4">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="downloaded">Downloaded ({offlineMaps.length})</TabsTrigger>
+            <TabsTrigger value="downloaded">Downloaded ({offlineRegions.length})</TabsTrigger>
             <TabsTrigger value="available">Available</TabsTrigger>
           </TabsList>
         </div>
@@ -257,8 +292,15 @@ export function OfflineMapsPanel({ onBack }: OfflineMapsPanelProps) {
           {/* Downloaded Maps Tab */}
           <TabsContent value="downloaded" className="h-full px-4 scroll-y hide-scrollbar scroll-smooth mt-0">
             <div className="space-y-3">
-              {offlineMaps.map((map) => (
-                <Card key={map.id} className="p-4">
+              {!isInitialized && (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="w-6 h-6 animate-spin text-gray-400 mr-2" />
+                  <span className="text-gray-500">Loading offline maps...</span>
+                </div>
+              )}
+              
+              {isInitialized && offlineRegions.map((region) => (
+                <Card key={region.id} className="p-4">
                   <div className="flex items-start gap-4">
                     <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                       <MapPin className="w-6 h-6 text-blue-600" />
@@ -267,55 +309,59 @@ export function OfflineMapsPanel({ onBack }: OfflineMapsPanelProps) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <h3 className="font-medium text-gray-900">{map.name}</h3>
-                          <p className="text-sm text-gray-600">{map.region}</p>
+                          <h3 className="font-medium text-gray-900">{region.name}</h3>
+                          <p className="text-sm text-gray-600">
+                            {region.center.lat.toFixed(4)}, {region.center.lng.toFixed(4)}
+                          </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          {getStatusIcon(map.status)}
+                          {getStatusIcon(region.status)}
                           <Badge 
                             variant="outline" 
-                            className={
-                              map.quality === 'detailed' 
-                                ? 'border-green-200 text-green-700' 
-                                : 'border-gray-200 text-gray-700'
-                            }
+                            className="border-green-200 text-green-700"
                           >
-                            {map.quality}
+                            {region.mapProvider.toUpperCase()}
                           </Badge>
                         </div>
                       </div>
                       
                       <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
-                        <span>{map.size}</span>
-                        <span>{map.coverage}</span>
-                        <span>Updated {map.lastUpdated}</span>
+                        <span>{(region.totalSize / (1024 * 1024)).toFixed(0)} MB</span>
+                        <span>{region.downloadedTiles} / {region.tileCount} tiles</span>
+                        <span>Z{region.minZoom}-{region.maxZoom}</span>
                       </div>
 
-                      {map.status === 'downloading' || map.status === 'updating' ? (
+                      {(region.status === 'downloading' || region.status === 'updating') && (
                         <div className="mb-3">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm text-gray-600">{getStatusText(map.status)}</span>
-                            <span className="text-sm text-gray-600">{Math.round(map.progress || 0)}%</span>
+                            <span className="text-sm text-gray-600">
+                              {region.status === 'downloading' ? 'Downloading...' : 'Updating...'}
+                            </span>
+                            <span className="text-sm text-gray-600">
+                              {Math.round((region.downloadedTiles / region.tileCount) * 100)}%
+                            </span>
                           </div>
-                          <Progress value={map.progress || 0} className="h-2" />
+                          <Progress value={(region.downloadedTiles / region.tileCount) * 100} className="h-2" />
                         </div>
-                      ) : null}
+                      )}
 
                       <div className="flex items-center gap-2">
-                        {map.status === 'downloaded' && (
+                        {region.status === 'downloaded' && (
                           <>
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleUpdate(map.id)}
+                              onClick={() => handleUpdateMap(region.id)}
+                              disabled={isDownloading}
                             >
-                              <RefreshCw className="w-4 h-4 mr-2" />
+                              <RefreshCw className={`w-4 h-4 mr-2 ${isDownloading ? 'animate-spin' : ''}`} />
                               Update
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleDelete(map.id)}
+                              onClick={() => handleDeleteMap(region.id)}
+                              disabled={isDownloading}
                               className="text-red-600 hover:text-red-700"
                             >
                               <Trash2 className="w-4 h-4 mr-2" />
@@ -323,13 +369,14 @@ export function OfflineMapsPanel({ onBack }: OfflineMapsPanelProps) {
                             </Button>
                           </>
                         )}
-                        {map.status === 'error' && (
+                        {region.status === 'error' && (
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleUpdate(map.id)}
+                            onClick={() => handleUpdateMap(region.id)}
+                            disabled={isDownloading}
                           >
-                            <RefreshCw className="w-4 h-4 mr-2" />
+                            <RefreshCw className={`w-4 h-4 mr-2 ${isDownloading ? 'animate-spin' : ''}`} />
                             Retry
                           </Button>
                         )}
@@ -339,7 +386,7 @@ export function OfflineMapsPanel({ onBack }: OfflineMapsPanelProps) {
                 </Card>
               ))}
 
-              {offlineMaps.length === 0 && (
+              {isInitialized && offlineRegions.length === 0 && (
                 <div className="text-center py-12">
                   <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="font-medium text-gray-900 mb-2">No offline maps</h3>
@@ -365,7 +412,9 @@ export function OfflineMapsPanel({ onBack }: OfflineMapsPanelProps) {
               </div>
 
               {availableRegions.map((region) => {
-                const isDownloaded = offlineMaps.some(map => map.id === region.id);
+                const existingRegion = offlineRegions.find(r => r.id === region.id);
+                const isDownloaded = existingRegion?.status === 'downloaded';
+                const isRegionDownloading = existingRegion?.status === 'downloading';
                 
                 return (
                   <Card key={region.id} className="p-4">
@@ -389,11 +438,18 @@ export function OfflineMapsPanel({ onBack }: OfflineMapsPanelProps) {
                             <Check className="w-3 h-3 mr-1" />
                             Downloaded
                           </Badge>
+                        ) : isRegionDownloading ? (
+                          <div className="flex items-center gap-2">
+                            <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+                            <span className="text-sm text-gray-600">
+                              {Math.round((existingRegion.downloadedTiles / existingRegion.tileCount) * 100)}%
+                            </span>
+                          </div>
                         ) : (
                           <Button
                             size="sm"
-                            onClick={() => handleDownload(region.id)}
-                            disabled={!wifiOnly && navigator.connection?.effectiveType !== 'wifi'}
+                            onClick={() => handleDownloadMap(region.id)}
+                            disabled={isDownloading || isRegionDownloading || (!wifiOnly && navigator?.connection?.effectiveType !== 'wifi')}
                           >
                             <Download className="w-4 h-4 mr-2" />
                             Download

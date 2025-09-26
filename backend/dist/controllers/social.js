@@ -6,7 +6,7 @@ const database_1 = require("@/config/database");
 const error_1 = require("@/utils/error");
 const security_1 = require("@/utils/security");
 const logger_1 = require("@/config/logger");
-const analytics_1 = require("@/services/analytics");
+const analytics_simple_1 = require("@/services/analytics-simple");
 const sendFriendRequestSchema = zod_1.z.object({
     email: zod_1.z.string().email().optional(),
     userId: zod_1.z.string().uuid().optional(),
@@ -84,6 +84,8 @@ const sendFriendRequest = async (req, res) => {
         }
         const friendRequest = await database_1.prisma.friendship.create({
             data: {
+                userId: requesterId,
+                friendId: targetUser.id,
                 requesterId,
                 addresseeId: targetUser.id,
                 status: 'PENDING',
@@ -109,7 +111,7 @@ const sendFriendRequest = async (req, res) => {
                 },
             },
         });
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId: requesterId,
             event: 'friend_request_sent',
             properties: {
@@ -118,9 +120,7 @@ const sendFriendRequest = async (req, res) => {
         });
         res.status(201).json({
             success: true,
-            data: {
-                friendRequest,
-            },
+            data: friendRequest,
         });
     }
     catch (error) {
@@ -155,7 +155,7 @@ const respondToFriendRequest = async (req, res) => {
         const updatedRequest = await database_1.prisma.friendship.update({
             where: { id: requestId },
             data: {
-                status: action === 'ACCEPT' ? 'ACCEPTED' : 'REJECTED',
+                status: action === 'ACCEPT' ? 'ACCEPTED' : 'BLOCKED',
             },
             include: {
                 requester: {
@@ -178,7 +178,7 @@ const respondToFriendRequest = async (req, res) => {
                 },
             },
         });
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId,
             event: 'friend_request_responded',
             properties: {
@@ -189,9 +189,7 @@ const respondToFriendRequest = async (req, res) => {
         });
         res.status(200).json({
             success: true,
-            data: {
-                friendRequest: updatedRequest,
-            },
+            data: updatedRequest,
         });
     }
     catch (error) {
@@ -262,14 +260,12 @@ const getFriends = async (req, res) => {
         }));
         res.status(200).json({
             success: true,
-            data: {
-                friends,
-                pagination: {
-                    page,
-                    limit,
-                    total,
-                    totalPages: Math.ceil(total / limit),
-                },
+            data: friends,
+            meta: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
             },
         });
     }
@@ -300,7 +296,7 @@ const removeFriend = async (req, res) => {
         if (deletedFriendship.count === 0) {
             throw new error_1.AppError('Friendship not found', 404);
         }
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId,
             event: 'friend_removed',
             properties: {
@@ -356,32 +352,16 @@ const shareRoute = async (req, res) => {
         }
         const shares = await Promise.all(friendIds.map(friendId => database_1.prisma.sharedContent.create({
             data: {
-                sharerId: userId,
-                recipientId: friendId,
-                contentType: 'ROUTE',
-                contentId: routeId,
+                userId,
+                type: 'route',
+                itemId: routeId,
+                title: route.name,
                 message: message ? (0, security_1.sanitizeInput)(message) : null,
-            },
-            include: {
-                sharer: {
-                    select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        avatar: true,
-                    },
-                },
-                recipient: {
-                    select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        avatar: true,
-                    },
-                },
+                recipients: [friendId],
+                shareToken: Math.random().toString(36).substring(2, 15),
             },
         })));
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId,
             event: 'route_shared',
             properties: {
@@ -441,32 +421,16 @@ const sharePlace = async (req, res) => {
         }
         const shares = await Promise.all(friendIds.map(friendId => database_1.prisma.sharedContent.create({
             data: {
-                sharerId: userId,
-                recipientId: friendId,
-                contentType: 'PLACE',
-                contentId: placeId,
+                userId,
+                type: 'place',
+                itemId: placeId,
+                title: place.name,
                 message: message ? (0, security_1.sanitizeInput)(message) : null,
-            },
-            include: {
-                sharer: {
-                    select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        avatar: true,
-                    },
-                },
-                recipient: {
-                    select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        avatar: true,
-                    },
-                },
+                recipients: [friendId],
+                shareToken: Math.random().toString(36).substring(2, 15),
             },
         })));
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId,
             event: 'place_shared',
             properties: {
@@ -499,15 +463,15 @@ const getSharedContent = async (req, res) => {
             page,
             limit,
         });
-        const where = { recipientId: userId };
+        const where = { recipients: { has: userId } };
         if (type) {
-            where.contentType = type;
+            where.type = type;
         }
         const [sharedContent, total] = await Promise.all([
             database_1.prisma.sharedContent.findMany({
                 where,
                 include: {
-                    sharer: {
+                    user: {
                         select: {
                             id: true,
                             firstName: true,
@@ -526,14 +490,12 @@ const getSharedContent = async (req, res) => {
         ]);
         res.status(200).json({
             success: true,
-            data: {
-                sharedContent,
-                pagination: {
-                    page,
-                    limit,
-                    total,
-                    totalPages: Math.ceil(total / limit),
-                },
+            data: sharedContent,
+            meta: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
             },
         });
     }

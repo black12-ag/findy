@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Share, 
@@ -19,6 +19,12 @@ import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Switch } from './ui/switch';
+import { useAuth } from '../hooks/useAuth';
+import { socialService } from '../services/socialService';
+import socialServiceBackend from '../services/social';
+import { logger } from '../utils/logger';
+import { toast } from 'sonner';
+import { useLoading } from '../contexts/LoadingContext';
 
 interface Route {
   id: string;
@@ -45,20 +51,61 @@ interface ETASharingPanelProps {
 }
 
 export function ETASharingPanel({ route, onClose }: ETASharingPanelProps) {
+  const { user, isAuthenticated } = useAuth();
+  const { startLoading, stopLoading } = useLoading();
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [customMessage, setCustomMessage] = useState('');
   const [autoUpdate, setAutoUpdate] = useState(true);
   const [shareLocation, setShareLocation] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   
-  // Mock contacts
-  const contacts: Contact[] = [
-    { id: '1', name: 'Sarah Chen', phone: '+1 555-0123', avatar: 'SC', isEmergencyContact: true },
-    { id: '2', name: 'Mike Rodriguez', phone: '+1 555-0124', avatar: 'MR' },
-    { id: '3', name: 'Emily Watson', email: 'emily@example.com', avatar: 'EW' },
-    { id: '4', name: 'David Kim', phone: '+1 555-0125', avatar: 'DK' },
-    { id: '5', name: 'Lisa Park', email: 'lisa@example.com', avatar: 'LP', isEmergencyContact: true },
-  ];
+  // Fetch real friends/contacts when component mounts
+  useEffect(() => {
+    const fetchContacts = async () => {
+      if (!isAuthenticated || !user) {
+        // Fallback to mock contacts when not authenticated
+        setContacts([
+          { id: '1', name: 'Sarah Chen', phone: '+1 555-0123', avatar: 'SC', isEmergencyContact: true },
+          { id: '2', name: 'Mike Rodriguez', phone: '+1 555-0124', avatar: 'MR' },
+          { id: '3', name: 'Emily Watson', email: 'emily@example.com', avatar: 'EW' },
+          { id: '4', name: 'David Kim', phone: '+1 555-0125', avatar: 'DK' },
+          { id: '5', name: 'Lisa Park', email: 'lisa@example.com', avatar: 'LP', isEmergencyContact: true },
+        ]);
+        return;
+      }
+      
+      setIsLoading(true);
+      startLoading('Loading contacts...');
+      try {
+        const friends = await socialServiceBackend.getAcceptedFriends();
+        const formattedContacts: Contact[] = friends.map((friend) => {
+          const friendData = socialServiceBackend.formatFriend(friend, user.id);
+          return {
+            id: friendData.id,
+            name: friendData.name,
+            email: friendData.email,
+            avatar: friendData.avatar || friendData.name.split(' ').map(n => n[0]).join(''),
+            isEmergencyContact: false // This would come from user preferences in a real app
+          };
+        });
+        setContacts(formattedContacts);
+      } catch (error) {
+        logger.error('Failed to fetch contacts:', error);
+        // Use mock data as fallback
+        setContacts([
+          { id: '1', name: 'Sarah Chen', phone: '+1 555-0123', avatar: 'SC', isEmergencyContact: true },
+          { id: '2', name: 'Mike Rodriguez', phone: '+1 555-0124', avatar: 'MR' },
+        ]);
+      } finally {
+        setIsLoading(false);
+        stopLoading();
+      }
+    };
+
+    fetchContacts();
+  }, [isAuthenticated, user]);
 
   const emergencyContacts = contacts.filter(c => c.isEmergencyContact);
   const regularContacts = contacts.filter(c => !c.isEmergencyContact);
@@ -83,18 +130,58 @@ export function ETASharingPanel({ route, onClose }: ETASharingPanelProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const shareViaText = () => {
+  const shareViaText = async () => {
+    if (!isAuthenticated || selectedContacts.length === 0) return;
+    
     const message = generateShareMessage();
     const selectedContactsList = contacts.filter(c => selectedContacts.includes(c.id));
-    console.log('Sharing via text:', { message, contacts: selectedContactsList });
-    // In a real app, this would send SMS
+    
+    startLoading('Sharing ETA via text...');
+    try {
+      // Use real Web Share API for ETA sharing
+      await socialService.shareETA({
+        destination: route.to.name,
+        eta: route.eta,
+        recipientIds: selectedContacts,
+        message: message,
+        includeTracking: true
+      });
+      
+      logger.info('ETA shared successfully via text:', { message, contacts: selectedContactsList });
+      toast.success('ETA shared via text successfully!');
+    } catch (error) {
+      logger.error('Failed to share ETA via text:', error);
+      toast.error('Failed to share ETA via text. Please try again.');
+    } finally {
+      stopLoading();
+    }
   };
 
-  const shareViaEmail = () => {
+  const shareViaEmail = async () => {
+    if (!isAuthenticated || selectedContacts.length === 0) return;
+    
     const message = generateShareMessage();
     const selectedContactsList = contacts.filter(c => selectedContacts.includes(c.id));
-    console.log('Sharing via email:', { message, contacts: selectedContactsList });
-    // In a real app, this would send email
+    
+    startLoading('Sharing ETA via email...');
+    try {
+      // Use real Web Share API for ETA sharing via email
+      await socialService.shareETA({
+        destination: route.to.name,
+        eta: route.eta,
+        recipientIds: selectedContacts,
+        message: message,
+        includeTracking: true
+      });
+      
+      logger.info('ETA shared successfully via email:', { message, contacts: selectedContactsList });
+      toast.success('ETA shared via email successfully!');
+    } catch (error) {
+      logger.error('Failed to share ETA via email:', error);
+      toast.error('Failed to share ETA via email. Please try again.');
+    } finally {
+      stopLoading();
+    }
   };
 
   const shareToEmergencyContacts = () => {

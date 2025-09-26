@@ -23,6 +23,8 @@ import { Input } from './ui/input';
 import { Progress } from './ui/progress';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { Alert, AlertDescription } from './ui/alert';
+import { logger } from '../utils/logger';
+import { toast } from 'sonner';
 
 interface ParkingSpot {
   id: string;
@@ -277,7 +279,13 @@ export function ParkingFinder({ onBack, destination }: ParkingFinderProps) {
                   <Button 
                     className="flex-1" 
                     variant="outline"
-                    onClick={() => {/* Navigate to spot */}}
+                    onClick={() => {
+                      // Start navigation to the selected parking spot
+                      window.location.href = `https://maps.apple.com/?daddr=${encodeURIComponent(spot.address)}`;
+                      // Alternative for Android: window.location.href = `geo:0,0?q=${encodeURIComponent(spot.address)}`;
+                      logger.info(`Navigation started to parking spot: ${spot.name}`);
+                      toast.success(`Starting navigation to ${spot.name}`);
+                    }}
                   >
                     <Navigation className="w-4 h-4 mr-1" />
                     Navigate
@@ -346,11 +354,41 @@ export function ParkingFinder({ onBack, destination }: ParkingFinderProps) {
               </div>
 
               <div className="space-y-3">
-                <Button className="w-full" size="lg">
+                <Button 
+                  className="w-full" 
+                  size="lg"
+                  onClick={() => {
+                    // Simulate card payment processing
+                    logger.info(`Processing card payment for parking spot: ${selectedSpot.name}`);
+                    toast.loading('Processing payment...');
+                    
+                    setTimeout(() => {
+                      toast.success('Parking reserved successfully!');
+                      logger.info(`Parking reservation confirmed: ${selectedSpot.name}`);
+                      setShowPayment(false);
+                      setSelectedSpot(null);
+                    }, 2000);
+                  }}
+                >
                   <CreditCard className="w-4 h-4 mr-2" />
                   Pay with Card
                 </Button>
-                <Button className="w-full" variant="outline" size="lg">
+                <Button 
+                  className="w-full" 
+                  variant="outline" 
+                  size="lg"
+                  onClick={() => {
+                    // Simulate Apple Pay processing
+                    logger.info(`Processing Apple Pay for parking spot: ${selectedSpot.name}`);
+                    
+                    if ('PaymentRequest' in window) {
+                      // Real Apple Pay integration would go here
+                      toast.success('Apple Pay not available in demo');
+                    } else {
+                      toast.info('Apple Pay not supported on this device');
+                    }
+                  }}
+                >
                   Pay with Apple Pay
                 </Button>
                 <Button 

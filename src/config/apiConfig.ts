@@ -5,8 +5,13 @@
  * with quota management and fallback strategies
  */
 
-// API Key (stored in environment for production)
-export const ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFkMmJkZDAzMGIwZDRlYjc4YzQyOWJlZGViZmVlMjgxIiwiaCI6Im11cm11cjY0In0=';
+// API Key from environment variables
+export const ORS_API_KEY = import.meta.env.VITE_ORS_API_KEY || '';
+
+// Validate API key availability
+if (!ORS_API_KEY) {
+  console.warn('⚠️ OpenRouteService API key not found. Please set VITE_ORS_API_KEY in your environment variables.');
+}
 
 // Base URL for all API calls
 export const ORS_BASE_URL = 'https://api.openrouteservice.org';

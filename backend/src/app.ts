@@ -3,11 +3,21 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
+import passport from 'passport';
+import session from 'express-session';
 import { config } from '@/config/env';
 import { logger } from '@/config/logger';
 import { connectDatabase } from '@/config/database';
 import { connectRedis } from '@/config/redis';
 import { errorHandler, notFound } from '@/middleware/error';
+import { initializeOAuth } from '@/config/oauth';
+import { 
+  initSentry as initializeSentry, 
+  sentryRequestHandler, 
+  sentryTracingHandler, 
+  sentryErrorHandler 
+} from '@/config/sentry-simple';
+import { setupSwagger } from '@/config/swagger';
 
 // Import routes
 import authRoutes from '@/routes/auth';
@@ -17,6 +27,13 @@ import usersRoutes from '@/routes/users';
 import socialRoutes from '@/routes/social';
 
 const app = express();
+
+// Initialize Sentry before any other middleware
+initializeSentry();
+
+// Sentry request handler must be the first middleware
+app.use(sentryRequestHandler);
+app.use(sentryTracingHandler);
 
 // Trust proxy for rate limiting behind reverse proxy
 app.set('trust proxy', 1);
@@ -88,12 +105,28 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
+// Session middleware (required for OAuth)
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'pathfinder-session-secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: config.node.env === 'production',
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+  },
+}));
+
+// Initialize Passport and OAuth
+app.use(passport.initialize());
+app.use(passport.session());
+initializeOAuth();
+
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logging middleware
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   logger.info('HTTP Request', {
     method: req.method,
     url: req.url,
@@ -104,7 +137,7 @@ app.use((req, res, next) => {
 });
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.status(200).json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -120,8 +153,11 @@ app.use('/api/v1/routes', routesRoutes);
 app.use('/api/v1/users', usersRoutes);
 app.use('/api/v1/social', socialRoutes);
 
+// Setup Swagger documentation
+setupSwagger(app);
+
 // API documentation endpoint
-app.get('/api/v1', (req, res) => {
+app.get('/api/v1', (_req, res) => {
   res.json({
     name: 'PathFinder Pro API',
     version: '1.0.0',
@@ -139,6 +175,9 @@ app.get('/api/v1', (req, res) => {
 
 // 404 handler
 app.use(notFound);
+
+// Sentry error handler must be before any other error handler
+app.use(sentryErrorHandler);
 
 // Global error handler
 app.use(errorHandler);

@@ -1,7 +1,9 @@
-import React, { Component, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { AlertTriangle, RefreshCw, Home, Bug } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
+import CrashReporting from './CrashReporting';
+import { logger } from '../utils/logger';
 
 interface Props {
   children: ReactNode;
@@ -34,7 +36,7 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    logger.error('ErrorBoundary caught an error:', error, errorInfo);
     
     this.setState({
       error,
@@ -62,7 +64,7 @@ class ErrorBoundary extends Component<Props, State> {
     };
 
     // For now, just log to console and localStorage for debugging
-    console.error('Crash Report:', errorData);
+    logger.error('Crash Report:', errorData);
     
     try {
       const crashReports = JSON.parse(localStorage.getItem('crashReports') || '[]');
@@ -73,7 +75,7 @@ class ErrorBoundary extends Component<Props, State> {
       }
       localStorage.setItem('crashReports', JSON.stringify(crashReports));
     } catch (e) {
-      console.error('Failed to save crash report:', e);
+      logger.error('Failed to save crash report:', e);
     }
   };
 
@@ -122,7 +124,7 @@ class ErrorBoundary extends Component<Props, State> {
                 </p>
               </div>
 
-              {process.env.NODE_ENV === 'development' && this.state.error && (
+              {import.meta.env?.MODE === 'development' && this.state.error && (
                 <details className="w-full mt-4 p-3 bg-red-50 rounded border text-left">
                   <summary className="cursor-pointer text-sm font-medium text-red-800 mb-2">
                     Error Details (Development Only)

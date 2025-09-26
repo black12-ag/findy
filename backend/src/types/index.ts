@@ -1,9 +1,9 @@
 import { Request } from 'express';
 import { User } from '@prisma/client';
 
-// Extend Express Request to include user
+// Extend Express Request to include user with id
 export interface AuthenticatedRequest extends Request {
-  user?: User;
+  user?: User & { id: string };
 }
 
 // API Response types
@@ -256,10 +256,13 @@ export interface UploadedFile {
   url?: string;
 }
 
-// Analytics types
+// Analytics types  
 export interface AnalyticsEvent {
+  id?: string;
   userId?: string;
+  sessionId?: string;
   event: string;
+  category?: string;
   properties?: Record<string, any>;
   timestamp?: Date;
 }

@@ -58,9 +58,9 @@ const register = async (req, res) => {
             data: {
                 email: validatedData.email,
                 password: hashedPassword,
-                firstName: validatedData.firstName,
-                lastName: validatedData.lastName,
-                username: validatedData.username,
+                firstName: validatedData.firstName || null,
+                lastName: validatedData.lastName || null,
+                username: validatedData.username || null,
                 emailVerifyToken,
                 preferences: {
                     create: {},
@@ -94,7 +94,7 @@ const register = async (req, res) => {
         res.status(types_1.HttpStatus.CREATED).json(response);
     }
     catch (error) {
-        logger_1.default.error('Registration failed', { error: error.message });
+        logger_1.default.error('Registration failed', { error: error instanceof Error ? error.message : String(error) });
         throw error;
     }
 };
@@ -130,9 +130,9 @@ const login = async (req, res) => {
             data: {
                 userId: user.id,
                 token: tokens.accessToken,
-                deviceType: req.get('User-Agent'),
-                ipAddress: req.ip,
-                userAgent: req.get('User-Agent'),
+                deviceType: req.get('User-Agent') || null,
+                ipAddress: req.ip || null,
+                userAgent: req.get('User-Agent') || null,
                 expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
             },
         });
@@ -151,7 +151,7 @@ const login = async (req, res) => {
         res.status(types_1.HttpStatus.OK).json(response);
     }
     catch (error) {
-        logger_1.default.error('Login failed', { error: error.message });
+        logger_1.default.error('Login failed', { error: error instanceof Error ? error.message : String(error) });
         throw error;
     }
 };
@@ -188,7 +188,7 @@ const refreshToken = async (req, res) => {
         res.status(types_1.HttpStatus.OK).json(response);
     }
     catch (error) {
-        logger_1.default.error('Token refresh failed', { error: error.message });
+        logger_1.default.error('Token refresh failed', { error: error instanceof Error ? error.message : String(error) });
         throw error;
     }
 };
@@ -219,7 +219,7 @@ const logout = async (req, res) => {
         res.status(types_1.HttpStatus.OK).json(response);
     }
     catch (error) {
-        logger_1.default.error('Logout failed', { error: error.message });
+        logger_1.default.error('Logout failed', { error: error instanceof Error ? error.message : String(error) });
         throw error;
     }
 };
@@ -237,7 +237,7 @@ const getMe = async (req, res) => {
         res.status(types_1.HttpStatus.OK).json(response);
     }
     catch (error) {
-        logger_1.default.error('Get user profile failed', { error: error.message });
+        logger_1.default.error('Get user profile failed', { error: error instanceof Error ? error.message : String(error) });
         throw error;
     }
 };
@@ -254,7 +254,8 @@ const forgotPassword = async (req, res) => {
                 success: true,
                 message: 'If the email exists, a password reset link has been sent',
             };
-            return res.status(types_1.HttpStatus.OK).json(response);
+            res.status(types_1.HttpStatus.OK).json(response);
+            return;
         }
         const { token, expires } = (0, auth_1.generatePasswordResetToken)();
         await prisma.user.update({
@@ -276,7 +277,7 @@ const forgotPassword = async (req, res) => {
         res.status(types_1.HttpStatus.OK).json(response);
     }
     catch (error) {
-        logger_1.default.error('Forgot password failed', { error: error.message });
+        logger_1.default.error('Forgot password failed', { error: error instanceof Error ? error.message : String(error) });
         throw error;
     }
 };
@@ -323,7 +324,7 @@ const resetPassword = async (req, res) => {
         res.status(types_1.HttpStatus.OK).json(response);
     }
     catch (error) {
-        logger_1.default.error('Password reset failed', { error: error.message });
+        logger_1.default.error('Password reset failed', { error: error instanceof Error ? error.message : String(error) });
         throw error;
     }
 };

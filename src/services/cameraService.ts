@@ -301,7 +301,7 @@ class CameraService {
   initializeQRScanner(): void {
     // This would require a QR code scanning library like jsQR
     // For now, we'll create a placeholder
-    console.log('QR Scanner initialized (requires jsQR library)');
+    // QR Scanner initialized (requires jsQR library)
   }
 
   /**

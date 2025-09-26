@@ -1,4 +1,5 @@
 import React from 'react';
+import { logger } from '../utils/logger';
 
 export interface DeviceOrientationData {
   alpha: number | null; // Z axis (compass heading) 0-360 degrees
@@ -41,20 +42,42 @@ export interface DeviceAttitude {
   timestamp: number;
 }
 
+export interface BatteryStatus {
+  level: number; // 0-1
+  charging: boolean;
+  chargingTime: number; // seconds
+  dischargingTime: number; // seconds
+  timestamp: number;
+}
+
+export interface NetworkStatus {
+  online: boolean;
+  effectiveType: '2g' | '3g' | '4g' | 'slow-2g';
+  downlink: number; // Mbps
+  rtt: number; // milliseconds
+  saveData: boolean;
+  timestamp: number;
+}
+
 export type SensorPermissionStatus = 'granted' | 'denied' | 'prompt' | 'unsupported';
 
 class DeviceSensorsService {
   private orientationSubscribers: ((data: DeviceOrientationData) => void)[] = [];
   private motionSubscribers: ((data: DeviceMotionData) => void)[] = [];
   private compassSubscribers: ((data: CompassData) => void)[] = [];
+  private batterySubscribers: ((data: BatteryStatus) => void)[] = [];
+  private networkSubscribers: ((data: NetworkStatus) => void)[] = [];
   
   private isOrientationActive: boolean = false;
   private isMotionActive: boolean = false;
   private lastOrientation: DeviceOrientationData | null = null;
   private lastMotion: DeviceMotionData | null = null;
+  private lastBattery: BatteryStatus | null = null;
+  private lastNetwork: NetworkStatus | null = null;
   
   private orientationHandler?: (event: DeviceOrientationEvent) => void;
   private motionHandler?: (event: DeviceMotionEvent) => void;
+  private battery: any = null; // BatteryManager
 
   /**
    * Check if device sensors are supported
@@ -63,11 +86,17 @@ class DeviceSensorsService {
     orientation: boolean;
     motion: boolean;
     compass: boolean;
+    battery: boolean;
+    network: boolean;
+    vibration: boolean;
   } {
     return {
       orientation: 'DeviceOrientationEvent' in window,
       motion: 'DeviceMotionEvent' in window,
-      compass: 'DeviceOrientationEvent' in window && 'webkitCompassHeading' in DeviceOrientationEvent.prototype
+      compass: 'DeviceOrientationEvent' in window && 'webkitCompassHeading' in DeviceOrientationEvent.prototype,
+      battery: 'getBattery' in navigator || 'battery' in navigator,
+      network: 'connection' in navigator || 'mozConnection' in navigator || 'webkitConnection' in navigator,
+      vibration: 'vibrate' in navigator
     };
   }
 
@@ -81,8 +110,8 @@ class DeviceSensorsService {
       try {
         const permission = await (DeviceOrientationEvent as any).requestPermission();
         return permission as SensorPermissionStatus;
-      } catch (error) {
-        console.error('Device orientation permission request failed:', error);
+    } catch (error) {
+        logger.error('Device orientation permission request failed:', error);
         return 'denied';
       }
     }
@@ -97,21 +126,34 @@ class DeviceSensorsService {
   }
 
   /**
-   * Start listening to device orientation
+   * Start listening to device orientation with fallbacks
    */
   async startOrientationTracking(): Promise<void> {
     if (this.isOrientationActive) {
-      console.warn('Orientation tracking is already active');
+      logger.warn('Orientation tracking is already active');
       return;
     }
 
-    const permission = await this.requestPermission();
-    if (permission !== 'granted') {
-      throw new Error(`Device sensors permission: ${permission}`);
+    // Check support first
+    const support = this.isSupported();
+    if (!support.orientation) {
+      logger.warn('Device orientation is not supported, providing mock data');
+      this.provideMockOrientationData();
+      return;
     }
 
-    if (!this.isSupported().orientation) {
-      throw new Error('Device orientation is not supported');
+    // Request permission for iOS 13+
+    try {
+      const permission = await this.requestPermission();
+      if (permission !== 'granted') {
+        logger.warn(`Device sensors permission ${permission}, providing mock data`);
+        this.provideMockOrientationData();
+        return;
+      }
+    } catch (error) {
+      logger.error('Permission request failed:', error);
+      this.provideMockOrientationData();
+      return;
     }
 
     this.orientationHandler = (event: DeviceOrientationEvent) => {
@@ -130,7 +172,7 @@ class DeviceSensorsService {
         try {
           callback(orientationData);
         } catch (error) {
-          console.error('Error in orientation subscriber:', error);
+          logger.error('Error in orientation subscriber:', error);
         }
       });
 
@@ -146,7 +188,7 @@ class DeviceSensorsService {
           try {
             callback(compassData);
           } catch (error) {
-            console.error('Error in compass subscriber:', error);
+            logger.error('Error in compass subscriber:', error);
           }
         });
       }
@@ -161,7 +203,7 @@ class DeviceSensorsService {
    */
   async startMotionTracking(): Promise<void> {
     if (this.isMotionActive) {
-      console.warn('Motion tracking is already active');
+      logger.warn('Motion tracking is already active');
       return;
     }
 
@@ -202,7 +244,7 @@ class DeviceSensorsService {
         try {
           callback(motionData);
         } catch (error) {
-          console.error('Error in motion subscriber:', error);
+          logger.error('Error in motion subscriber:', error);
         }
       });
     };
@@ -461,6 +503,320 @@ class DeviceSensorsService {
                        'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
     const index = Math.round(h / 22.5) % 16;
     return directions[index];
+  }
+
+  /**
+   * Start battery monitoring
+   */
+  async startBatteryMonitoring(): Promise<void> {
+    if (!this.isSupported().battery) {
+      throw new Error('Battery API is not supported');
+    }
+
+    try {
+      // Try modern getBattery API
+      if ('getBattery' in navigator) {
+        this.battery = await (navigator as any).getBattery();
+      } else if ('battery' in navigator) {
+        // Fallback for older browsers
+        this.battery = (navigator as any).battery;
+      }
+
+      if (this.battery) {
+        const updateBattery = () => {
+          const batteryStatus: BatteryStatus = {
+            level: this.battery.level,
+            charging: this.battery.charging,
+            chargingTime: this.battery.chargingTime,
+            dischargingTime: this.battery.dischargingTime,
+            timestamp: Date.now()
+          };
+
+          this.lastBattery = batteryStatus;
+          this.batterySubscribers.forEach(callback => {
+            try {
+              callback(batteryStatus);
+            } catch (error) {
+              console.error('Error in battery subscriber:', error);
+            }
+          });
+        };
+
+        // Set up event listeners
+        this.battery.addEventListener('chargingchange', updateBattery);
+        this.battery.addEventListener('levelchange', updateBattery);
+        this.battery.addEventListener('chargingtimechange', updateBattery);
+        this.battery.addEventListener('dischargingtimechange', updateBattery);
+
+        // Initial update
+        updateBattery();
+      }
+    } catch (error) {
+      console.error('Failed to start battery monitoring:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Start network monitoring
+   */
+  startNetworkMonitoring(): void {
+    if (!this.isSupported().network) {
+      throw new Error('Network Information API is not supported');
+    }
+
+    const connection = (navigator as any).connection || 
+                      (navigator as any).mozConnection || 
+                      (navigator as any).webkitConnection;
+
+    if (connection) {
+      const updateNetwork = () => {
+        const networkStatus: NetworkStatus = {
+          online: navigator.onLine,
+          effectiveType: connection.effectiveType || '4g',
+          downlink: connection.downlink || 0,
+          rtt: connection.rtt || 0,
+          saveData: connection.saveData || false,
+          timestamp: Date.now()
+        };
+
+        this.lastNetwork = networkStatus;
+        this.networkSubscribers.forEach(callback => {
+          try {
+            callback(networkStatus);
+          } catch (error) {
+            console.error('Error in network subscriber:', error);
+          }
+        });
+      };
+
+      // Set up event listeners
+      connection.addEventListener('change', updateNetwork);
+      window.addEventListener('online', updateNetwork);
+      window.addEventListener('offline', updateNetwork);
+
+      // Initial update
+      updateNetwork();
+    }
+  }
+
+  /**
+   * Vibrate device with fallback
+   */
+  vibrate(pattern: number | number[]): boolean {
+    if (!this.isSupported().vibration) {
+      console.warn('Vibration not supported, providing visual feedback');
+      this.provideVisualFeedback(pattern);
+      return false;
+    }
+
+    try {
+      const result = navigator.vibrate(pattern);
+      if (!result) {
+        // Fallback to visual feedback if vibration fails
+        this.provideVisualFeedback(pattern);
+      }
+      return result;
+    } catch (error) {
+      console.error('Vibration failed:', error);
+      this.provideVisualFeedback(pattern);
+      return false;
+    }
+  }
+
+  /**
+   * Provide mock orientation data when real sensors unavailable
+   */
+  private provideMockOrientationData(): void {
+    this.isOrientationActive = true;
+    
+    // Simulate device orientation changes
+    const interval = setInterval(() => {
+      if (!this.isOrientationActive) {
+        clearInterval(interval);
+        return;
+      }
+
+      const mockData: DeviceOrientationData = {
+        alpha: Math.sin(Date.now() / 10000) * 360, // Slow compass rotation
+        beta: Math.sin(Date.now() / 5000) * 30,   // Tilt forward/backward
+        gamma: Math.sin(Date.now() / 7000) * 30,  // Tilt left/right
+        absolute: false,
+        timestamp: Date.now()
+      };
+
+      this.lastOrientation = mockData;
+      
+      this.orientationSubscribers.forEach(callback => {
+        try {
+          callback(mockData);
+        } catch (error) {
+          console.error('Error in mock orientation subscriber:', error);
+        }
+      });
+
+      // Also provide mock compass data
+      const compassData: CompassData = {
+        heading: this.normalizeHeading(mockData.alpha!),
+        accuracy: 15,
+        timestamp: mockData.timestamp
+      };
+
+      this.compassSubscribers.forEach(callback => {
+        try {
+          callback(compassData);
+        } catch (error) {
+          console.error('Error in mock compass subscriber:', error);
+        }
+      });
+    }, 100); // 10fps
+  }
+
+  /**
+   * Provide mock motion data when real sensors unavailable
+   */
+  private provideMockMotionData(): void {
+    this.isMotionActive = true;
+    
+    const interval = setInterval(() => {
+      if (!this.isMotionActive) {
+        clearInterval(interval);
+        return;
+      }
+
+      const mockData: DeviceMotionData = {
+        acceleration: {
+          x: (Math.random() - 0.5) * 2,
+          y: (Math.random() - 0.5) * 2,
+          z: (Math.random() - 0.5) * 2
+        },
+        accelerationIncludingGravity: {
+          x: (Math.random() - 0.5) * 20,
+          y: (Math.random() - 0.5) * 20,
+          z: 9.8 + (Math.random() - 0.5) * 2 // Include gravity
+        },
+        rotationRate: {
+          alpha: (Math.random() - 0.5) * 10,
+          beta: (Math.random() - 0.5) * 10,
+          gamma: (Math.random() - 0.5) * 10
+        },
+        interval: 16, // ~60fps
+        timestamp: Date.now()
+      };
+
+      this.lastMotion = mockData;
+      
+      this.motionSubscribers.forEach(callback => {
+        try {
+          callback(mockData);
+        } catch (error) {
+          console.error('Error in mock motion subscriber:', error);
+        }
+      });
+    }, 16); // ~60fps
+  }
+
+  /**
+   * Provide visual feedback when vibration is not available
+   */
+  private provideVisualFeedback(pattern: number | number[]): void {
+    const patternArray = Array.isArray(pattern) ? pattern : [pattern];
+    let index = 0;
+    
+    const processPattern = () => {
+      if (index >= patternArray.length) return;
+      
+      const duration = patternArray[index];
+      
+      if (index % 2 === 0) {
+        // Vibration phase - flash the screen
+        this.flashScreen(duration);
+      }
+      
+      index++;
+      if (index < patternArray.length) {
+        setTimeout(processPattern, duration);
+      }
+    };
+    
+    processPattern();
+  }
+
+  /**
+   * Flash screen as visual feedback
+   */
+  private flashScreen(duration: number): void {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.3);
+      z-index: 10000;
+      pointer-events: none;
+      animation: flash ${duration}ms ease-out;
+    `;
+    
+    // Add flash animation
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes flash {
+        0% { opacity: 1; }
+        100% { opacity: 0; }
+      }
+    `;
+    
+    document.head.appendChild(style);
+    document.body.appendChild(overlay);
+    
+    setTimeout(() => {
+      document.body.removeChild(overlay);
+      document.head.removeChild(style);
+    }, duration);
+  }
+
+  /**
+   * Subscribe to battery status updates
+   */
+  subscribeToBattery(callback: (data: BatteryStatus) => void): () => void {
+    this.batterySubscribers.push(callback);
+    
+    return () => {
+      const index = this.batterySubscribers.indexOf(callback);
+      if (index > -1) {
+        this.batterySubscribers.splice(index, 1);
+      }
+    };
+  }
+
+  /**
+   * Subscribe to network status updates
+   */
+  subscribeToNetwork(callback: (data: NetworkStatus) => void): () => void {
+    this.networkSubscribers.push(callback);
+    
+    return () => {
+      const index = this.networkSubscribers.indexOf(callback);
+      if (index > -1) {
+        this.networkSubscribers.splice(index, 1);
+      }
+    };
+  }
+
+  /**
+   * Get last known battery status
+   */
+  getLastBatteryStatus(): BatteryStatus | null {
+    return this.lastBattery;
+  }
+
+  /**
+   * Get last known network status
+   */
+  getLastNetworkStatus(): NetworkStatus | null {
+    return this.lastNetwork;
   }
 
   /**

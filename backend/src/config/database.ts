@@ -41,14 +41,8 @@ let redisClient: Redis;
 export const getRedisClient = (): Redis => {
   if (!redisClient) {
     redisClient = new Redis(config.database.redis, {
-      retryDelayOnFailover: 100,
       maxRetriesPerRequest: 3,
       lazyConnect: true,
-      reconnectOnError: (err) => {
-        logger.error('Redis reconnection error:', err);
-        const targetError = 'READONLY';
-        return err.message.includes(targetError);
-      },
     });
 
     // Redis event handlers
@@ -137,4 +131,8 @@ export const initializeDatabases = async (): Promise<void> => {
   }
 };
 
-export { prismaClient, redisClient };
+// Export instances for backward compatibility
+export const prisma = getPrismaClient();
+
+// Export functions
+export const connectDatabase = initializeDatabases;

@@ -93,9 +93,9 @@ export const register = async (
       data: {
         email: validatedData.email,
         password: hashedPassword,
-        firstName: validatedData.firstName,
-        lastName: validatedData.lastName,
-        username: validatedData.username,
+        firstName: validatedData.firstName || null,
+        lastName: validatedData.lastName || null,
+        username: validatedData.username || null,
         emailVerifyToken,
         preferences: {
           create: {
@@ -140,7 +140,7 @@ export const register = async (
 
     res.status(HttpStatus.CREATED).json(response);
   } catch (error) {
-    logger.error('Registration failed', { error: error.message });
+    logger.error('Registration failed', { error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
 };
@@ -195,9 +195,9 @@ export const login = async (
       data: {
         userId: user.id,
         token: tokens.accessToken,
-        deviceType: req.get('User-Agent'),
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent'),
+        deviceType: req.get('User-Agent') || null,
+        ipAddress: req.ip || null,
+        userAgent: req.get('User-Agent') || null,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
     });
@@ -218,7 +218,7 @@ export const login = async (
 
     res.status(HttpStatus.OK).json(response);
   } catch (error) {
-    logger.error('Login failed', { error: error.message });
+    logger.error('Login failed', { error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
 };
@@ -273,7 +273,7 @@ export const refreshToken = async (
 
     res.status(HttpStatus.OK).json(response);
   } catch (error) {
-    logger.error('Token refresh failed', { error: error.message });
+    logger.error('Token refresh failed', { error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
 };
@@ -318,7 +318,7 @@ export const logout = async (
 
     res.status(HttpStatus.OK).json(response);
   } catch (error) {
-    logger.error('Logout failed', { error: error.message });
+    logger.error('Logout failed', { error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
 };
@@ -344,7 +344,7 @@ export const getMe = async (
 
     res.status(HttpStatus.OK).json(response);
   } catch (error) {
-    logger.error('Get user profile failed', { error: error.message });
+    logger.error('Get user profile failed', { error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
 };
@@ -370,7 +370,8 @@ export const forgotPassword = async (
         success: true,
         message: 'If the email exists, a password reset link has been sent',
       };
-      return res.status(HttpStatus.OK).json(response);
+      res.status(HttpStatus.OK).json(response);
+      return;
     }
 
     // Generate password reset token
@@ -399,7 +400,7 @@ export const forgotPassword = async (
 
     res.status(HttpStatus.OK).json(response);
   } catch (error) {
-    logger.error('Forgot password failed', { error: error.message });
+    logger.error('Forgot password failed', { error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
 };
@@ -469,7 +470,7 @@ export const resetPassword = async (
 
     res.status(HttpStatus.OK).json(response);
   } catch (error) {
-    logger.error('Password reset failed', { error: error.message });
+    logger.error('Password reset failed', { error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
 };

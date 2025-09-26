@@ -15,8 +15,8 @@ import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Switch } from './ui/switch';
 import { motion } from 'motion/react';
-
-type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking' | 'error';
+import { useSpeech } from '../services/speechService';
+import { logger } from '../utils/logger';
 
 interface VoiceCommandPanelProps {
   onClose: () => void;
@@ -30,27 +30,44 @@ interface VoiceCommand {
 }
 
 export function VoiceCommandPanel({ onClose, onVoiceCommand }: VoiceCommandPanelProps) {
-  const [voiceState, setVoiceState] = useState<VoiceState>('idle');
-  const [currentTranscript, setCurrentTranscript] = useState('');
+  const {
+    isListening,
+    isSpeaking,
+    currentTranscript,
+    state,
+    error,
+    lastCommand,
+    isRecognitionSupported,
+    isSynthesisSupported,
+    startListening,
+    stopListening,
+    speak,
+    stopSpeaking,
+    getAvailableCommands
+  } = useSpeech();
+
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [wakePhraseEnabled, setWakePhraseEnabled] = useState(true);
   const [autoSpeak, setAutoSpeak] = useState(true);
-  const [lastCommand, setLastCommand] = useState('');
 
-  // Mock voice commands
+  // Get available voice commands from Speech Service
+  const availableCommands = getAvailableCommands();
+  
+  // Transform to display format
   const voiceCommands: VoiceCommand[] = [
     { phrase: 'Navigate to [place]', description: 'Start navigation to a destination', category: 'Navigation' },
     { phrase: 'Find [type of place]', description: 'Search for nearby places', category: 'Search' },
     { phrase: 'Take me home', description: 'Navigate to your home address', category: 'Navigation' },
     { phrase: 'Go to work', description: 'Navigate to your work address', category: 'Navigation' },
-    { phrase: 'Avoid highways', description: 'Change route preferences', category: 'Route Options' },
+    { phrase: 'Avoid [option]', description: 'Change route preferences (highways, tolls, etc.)', category: 'Route Options' },
     { phrase: 'Add a stop', description: 'Add waypoint to current route', category: 'Route Options' },
-    { phrase: 'Report traffic', description: 'Report traffic incident', category: 'Community' },
+    { phrase: 'Report [incident]', description: 'Report traffic incident', category: 'Community' },
     { phrase: 'Share my location', description: 'Share current location', category: 'Sharing' },
-    { phrase: 'Switch to walking', description: 'Change transport mode', category: 'Transport' },
-    { phrase: 'Show me around', description: 'Explore nearby attractions', category: 'Discovery' },
+    { phrase: 'Switch to [mode]', description: 'Change transport mode (walking, driving, etc.)', category: 'Transport' },
     { phrase: 'Mute navigation', description: 'Turn off voice guidance', category: 'Settings' },
-    { phrase: 'Repeat directions', description: 'Repeat last instruction', category: 'Navigation' }
+    { phrase: 'Repeat directions', description: 'Repeat last instruction', category: 'Navigation' },
+    { phrase: 'Help', description: 'Show available commands', category: 'Help' },
+    { phrase: 'Stop', description: 'Cancel current action', category: 'Control' }
   ];
 
   // Group commands by category
@@ -62,57 +79,91 @@ export function VoiceCommandPanel({ onClose, onVoiceCommand }: VoiceCommandPanel
     return acc;
   }, {} as Record<string, VoiceCommand[]>);
 
-  // Simulate voice recognition
-  const startListening = () => {
-    if (!voiceEnabled) return;
-    
-    setVoiceState('listening');
-    setCurrentTranscript('');
-    
-    // Simulate listening process
-    setTimeout(() => {
-      const mockTranscripts = [
-        'Navigate to Golden Gate Park',
-        'Find coffee shops nearby',
-        'Take me home',
-        'Report traffic on Bay Bridge',
-        'Switch to walking mode'
-      ];
+  // Handle voice command events
+  useEffect(() => {
+    const handleVoiceCommand = (event: CustomEvent) => {
+      const { action, parameters, originalText } = event.detail;
       
-      const transcript = mockTranscripts[Math.floor(Math.random() * mockTranscripts.length)];
-      setCurrentTranscript(transcript);
-      setVoiceState('processing');
+      // Call the parent callback
+      onVoiceCommand(originalText);
       
-      setTimeout(() => {
-        setLastCommand(transcript);
-        onVoiceCommand(transcript);
-        setVoiceState('speaking');
+      // Provide voice feedback if enabled
+      if (autoSpeak && isSynthesisSupported) {
+        let response = '';
         
-        setTimeout(() => {
-          setVoiceState('idle');
-          setCurrentTranscript('');
-        }, 2000);
-      }, 1500);
-    }, 2000);
+        switch (action) {
+          case 'navigate':
+            response = `Navigating to ${parameters.destination}`;
+            break;
+          case 'navigate_home':
+            response = 'Taking you home';
+            break;
+          case 'navigate_work':
+            response = 'Navigating to work';
+            break;
+          case 'search':
+            response = `Searching for ${parameters.type}`;
+            break;
+          case 'add_stop':
+            response = 'Adding stop to your route';
+            break;
+          case 'mute':
+            response = 'Navigation muted';
+            break;
+          case 'unmute':
+            response = 'Navigation unmuted';
+            break;
+          case 'help':
+            response = 'Here are the available voice commands. You can say navigate to a place, find nearby locations, or ask me to take you home.';
+            break;
+          default:
+            response = `Command ${action} executed`;
+        }
+        
+        if (response) {
+          speak(response);
+        }
+      }
+    };
+
+    window.addEventListener('voiceCommand', handleVoiceCommand as EventListener);
+    
+    return () => {
+      window.removeEventListener('voiceCommand', handleVoiceCommand as EventListener);
+    };
+  }, [autoSpeak, isSynthesisSupported, onVoiceCommand, speak]);
+
+  const handleStartListening = async () => {
+    if (!voiceEnabled || !isRecognitionSupported) return;
+    
+    try {
+      await startListening();
+    } catch (error) {
+      logger.error('Failed to start voice listening:', error);
+    }
   };
 
-  const stopListening = () => {
-    setVoiceState('idle');
-    setCurrentTranscript('');
+  const handleStopListening = () => {
+    stopListening();
   };
 
   const getVoiceStateInfo = () => {
-    switch (voiceState) {
+    if (error) {
+      return { color: '#EF4444', text: 'Error', description: error.message || 'Please try again' };
+    }
+    
+    switch (state) {
       case 'listening':
         return { color: '#3B82F6', text: 'Listening...', description: 'Speak your command' };
       case 'processing':
         return { color: '#F59E0B', text: 'Processing...', description: 'Understanding your request' };
-      case 'speaking':
-        return { color: '#10B981', text: 'Speaking...', description: 'Providing response' };
       case 'error':
         return { color: '#EF4444', text: 'Error', description: 'Please try again' };
       default:
-        return { color: '#6B7280', text: 'Ready', description: 'Tap to start' };
+        if (isSpeaking) {
+          return { color: '#10B981', text: 'Speaking...', description: 'Providing response' };
+        }
+        return { color: '#6B7280', text: 'Ready', description: isRecognitionSupported ? 'Tap to start' : 'Speech recognition not supported' };
     }
   };
 
@@ -146,19 +197,19 @@ export function VoiceCommandPanel({ onClose, onVoiceCommand }: VoiceCommandPanel
           <motion.button
             className="w-24 h-24 rounded-full shadow-lg flex items-center justify-center text-white relative"
             style={{ backgroundColor: stateInfo.color }}
-            onClick={voiceState === 'listening' ? stopListening : startListening}
-            disabled={!voiceEnabled || voiceState === 'processing' || voiceState === 'speaking'}
+            onClick={isListening ? handleStopListening : handleStartListening}
+            disabled={!voiceEnabled || !isRecognitionSupported || state === 'processing' || isSpeaking}
             whileTap={{ scale: 0.95 }}
-            animate={voiceState === 'listening' ? { scale: [1, 1.1, 1] } : {}}
-            transition={{ repeat: voiceState === 'listening' ? Infinity : 0, duration: 1 }}
+            animate={isListening ? { scale: [1, 1.1, 1] } : {}}
+            transition={{ repeat: isListening ? Infinity : 0, duration: 1 }}
           >
-            {voiceState === 'listening' ? (
+            {isListening ? (
               <MicOff className="w-10 h-10" />
             ) : (
               <Mic className="w-10 h-10" />
             )}
             
-            {voiceState === 'listening' && (
+            {isListening && (
               <div className="absolute inset-0 rounded-full border-4 border-blue-300 animate-ping" />
             )}
           </motion.button>
@@ -175,11 +226,20 @@ export function VoiceCommandPanel({ onClose, onVoiceCommand }: VoiceCommandPanel
           </Card>
         )}
 
-        {lastCommand && voiceState === 'idle' && (
+        {lastCommand && state === 'idle' && (
           <Card className="p-3 mb-4 bg-green-50 border-green-200">
             <div className="flex items-center gap-2 justify-center">
               <Check className="w-4 h-4 text-green-600" />
-              <div className="text-sm text-green-900">Last: "{lastCommand}"</div>
+              <div className="text-sm text-green-900">Last: "{lastCommand.originalText}"</div>
+            </div>
+          </Card>
+        )}
+        
+        {error && (
+          <Card className="p-3 mb-4 bg-red-50 border-red-200">
+            <div className="flex items-center gap-2 justify-center">
+              <AlertCircle className="w-4 h-4 text-red-600" />
+              <div className="text-sm text-red-900">{error.message}</div>
             </div>
           </Card>
         )}

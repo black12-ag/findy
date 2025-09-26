@@ -22,6 +22,9 @@ import { Avatar, AvatarFallback } from './ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { useAuth } from '../hooks/useAuth';
+import { socialService } from '../services/social';
+import { logger } from '../utils/logger';
 
 interface SocialPanelProps {
   onBack: () => void;
@@ -58,7 +61,11 @@ interface IncidentReport {
 }
 
 export default function SocialPanel({ onBack, onLocationSelect }: SocialPanelProps) {
+  const { user, isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState<'feed' | 'incidents' | 'leaderboard'>('feed');
+  const [isLoading, setIsLoading] = useState(false);
+  const [friends, setFriends] = useState<any[]>([]);
+  const [sharedContent, setSharedContent] = useState<any[]>([]);
 
   // Quick Action dialogs
   const [photoOpen, setPhotoOpen] = useState(false);
@@ -133,7 +140,31 @@ export default function SocialPanel({ onBack, onLocationSelect }: SocialPanelPro
     return () => el.removeEventListener('scroll', onScroll);
   }, [activeTab, scrollPos]);
 
-  // Mock social feed data
+  // Fetch real social data when user is authenticated
+  useEffect(() => {
+    const fetchSocialData = async () => {
+      if (!isAuthenticated || !user) return;
+      
+      setIsLoading(true);
+      try {
+        // Fetch friends
+        const friendsData = await socialService.getAcceptedFriends();
+        setFriends(friendsData);
+        
+        // Fetch shared content
+        const contentData = await socialService.getSharedContent({ limit: 20 });
+        setSharedContent(contentData.sharedContent);
+      } catch (error) {
+        logger.error('Failed to fetch social data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchSocialData();
+  }, [isAuthenticated, user]);
+
+  // Mock social feed data (fallback when not authenticated)
   const [socialFeed, setSocialFeed] = useState<SocialPost[]>([
     {
       id: '1',

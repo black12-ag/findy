@@ -39,7 +39,7 @@ const database_1 = require("@/config/database");
 const error_1 = require("@/utils/error");
 const security_1 = require("@/utils/security");
 const logger_1 = require("@/config/logger");
-const analytics_1 = require("@/services/analytics");
+const analytics_simple_1 = require("@/services/analytics-simple");
 const updateProfileSchema = zod_1.z.object({
     firstName: zod_1.z.string().min(1).max(100).optional(),
     lastName: zod_1.z.string().min(1).max(100).optional(),
@@ -181,7 +181,7 @@ const updateProfile = async (req, res) => {
                 },
             },
         });
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId,
             event: 'profile_updated',
             properties: {
@@ -318,7 +318,7 @@ const updatePreferences = async (req, res) => {
                 }),
             },
         });
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId,
             event: 'preferences_updated',
             properties: {
@@ -370,7 +370,7 @@ const changePassword = async (req, res) => {
         await database_1.prisma.session.deleteMany({
             where: { userId },
         });
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId,
             event: 'password_changed',
         });
@@ -394,7 +394,7 @@ const getUserAnalytics = async (req, res) => {
             throw new error_1.AppError('Days must be a number between 1 and 365', 400);
         }
         logger_1.logger.info('Getting user analytics', { userId, days: daysNumber });
-        const analytics = await analytics_1.analyticsService.getUserAnalytics(userId, daysNumber);
+        const analytics = await analytics_simple_1.analyticsService.getUserAnalytics(userId, daysNumber);
         res.status(200).json({
             success: true,
             data: {
@@ -442,7 +442,7 @@ const deleteAccount = async (req, res) => {
             await tx.user.delete({ where: { id: userId } });
         });
         try {
-            await analytics_1.analyticsService.trackEvent({
+            await analytics_simple_1.analyticsService.trackEvent({
                 userId,
                 event: 'account_deleted',
                 properties: {

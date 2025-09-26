@@ -1,4 +1,5 @@
 import React from 'react';
+import { logger } from '../utils/logger';
 
 // Storage quotas and limits
 export const STORAGE_LIMITS = {
@@ -69,13 +70,15 @@ class StorageService {
       const request = indexedDB.open(this.dbName, this.version);
 
       request.onerror = () => {
-        console.error('[Storage] Failed to open database:', request.error);
+        logger.error('[Storage] Failed to open database', request.error);
         reject(request.error);
       };
 
       request.onsuccess = () => {
         this.db = request.result;
-        console.log('[Storage] Database opened successfully');
+        if (import.meta.env.DEV) {
+          logger.info('[Storage] Database opened successfully');
+        }
         resolve();
       };
 
@@ -117,7 +120,9 @@ class StorageService {
       poiStore.createIndex('category', 'category', { unique: false });
     }
 
-    console.log('[Storage] Object stores created');
+    if (import.meta.env.DEV) {
+      logger.info('[Storage] Object stores created');
+    }
   }
 
   /**
@@ -179,7 +184,7 @@ class StorageService {
         const estimate = await navigator.storage.estimate();
         return estimate.quota || STORAGE_LIMITS.TOTAL_QUOTA;
       } catch (error) {
-        console.warn('[Storage] Could not get storage estimate:', error);
+        logger.warn('[Storage] Could not get storage estimate', error);
       }
     }
     return STORAGE_LIMITS.TOTAL_QUOTA;
@@ -205,7 +210,7 @@ class StorageService {
       };
 
       request.onerror = () => {
-        console.error(`[Storage] Failed to get size for store ${storeName}`);
+        logger.error('Failed to get size for store', { storeName });
         resolve(0);
       };
     });
@@ -347,7 +352,7 @@ class StorageService {
 
       request.onsuccess = () => resolve(request.result || null);
       request.onerror = () => {
-        console.error(`[Storage] Failed to get item ${key} from ${storeName}`);
+        logger.error('Failed to get item from storage', { key, storeName });
         resolve(null);
       };
     });
@@ -366,7 +371,7 @@ class StorageService {
 
       request.onsuccess = () => resolve();
       request.onerror = () => {
-        console.error(`[Storage] Failed to store item in ${storeName}:`, request.error);
+        logger.error('Failed to store item in storage', { storeName, error: request.error });
         reject(request.error);
       };
     });
@@ -412,18 +417,18 @@ class StorageService {
           if (item.priority !== 'high') {
             cursor.delete();
             freedSpace += itemSize;
-            console.log(`[Storage] Cleaned up ${itemSize} bytes from ${storeName}`);
+            logger.debug('Storage cleanup: freed space', { itemSize, storeName });
           }
           
           cursor.continue();
         } else {
-          console.log(`[Storage] Cleanup completed. Freed ${freedSpace} bytes from ${storeName}`);
+          logger.debug('Storage cleanup completed', { freedSpace, storeName });
           resolve();
         }
       };
 
       request.onerror = () => {
-        console.error(`[Storage] Cleanup failed for ${storeName}`);
+        logger.error('Storage cleanup failed', { storeName });
         resolve();
       };
     });
@@ -441,12 +446,12 @@ class StorageService {
       const request = store.clear();
 
       request.onsuccess = () => {
-        console.log(`[Storage] Cleared store ${storeName}`);
+        logger.info('Storage store cleared', { storeName });
         resolve();
       };
 
       request.onerror = () => {
-        console.error(`[Storage] Failed to clear store ${storeName}:`, request.error);
+        logger.error('Failed to clear storage store', { storeName, error: request.error });
         reject(request.error);
       };
     });
@@ -489,7 +494,7 @@ class StorageService {
 
       request.onsuccess = () => resolve(request.result || []);
       request.onerror = () => {
-        console.error(`[Storage] Failed to get all items from ${storeName}`);
+        logger.error('Failed to get all items from storage store', { storeName });
         resolve([]);
       };
     });
@@ -525,7 +530,7 @@ class StorageService {
       }
     }
 
-    console.log(`[Storage] Optimization completed. Cleaned ${totalCleaned} bytes from stores: ${optimized.join(', ')}`);
+    logger.info('Storage optimization completed', { totalCleaned, optimizedStores: optimized });
     
     return {
       cleaned: totalCleaned,
@@ -545,7 +550,7 @@ export const useStorage = () => {
       const newStats = await storageService.getStorageStats();
       setStats(newStats);
     } catch (error) {
-      console.error('Failed to get storage stats:', error);
+      logger.error('Failed to get storage stats', { error });
     } finally {
       setIsLoading(false);
     }
@@ -561,7 +566,7 @@ export const useStorage = () => {
       await storageService.clearStore(storeName);
       await refreshStats();
     } catch (error) {
-      console.error(`Failed to clear store ${storeName}:`, error);
+      logger.error('Failed to clear storage store', { storeName, error });
       throw error;
     } finally {
       setIsLoading(false);
@@ -575,7 +580,7 @@ export const useStorage = () => {
       await refreshStats();
       return result;
     } catch (error) {
-      console.error('Failed to optimize storage:', error);
+      logger.error('Failed to optimize storage', { error });
       throw error;
     } finally {
       setIsLoading(false);
@@ -587,7 +592,7 @@ export const useStorage = () => {
     try {
       return await storageService.exportData();
     } catch (error) {
-      console.error('Failed to export data:', error);
+      logger.error('Failed to export data', { error });
       throw error;
     } finally {
       setIsLoading(false);

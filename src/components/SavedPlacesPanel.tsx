@@ -7,6 +7,9 @@ import { Input } from './ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { placesService } from '../services/places';
+import { logger } from '../utils/logger';
+import { savedPlaceSchema, validateForm } from '../utils/validation';
+import { toast } from 'sonner';
 
 interface Location {
   id: string;
@@ -30,6 +33,7 @@ export function SavedPlacesPanel({ places, onLocationSelect, onBack, onAddPlace 
   const [newPlaceName, setNewPlaceName] = useState('');
   const [newPlaceAddress, setNewPlaceAddress] = useState('');
   const [newPlaceCategory, setNewPlaceCategory] = useState<string>('home');
+  const [placeErrors, setPlaceErrors] = useState<{[key: string]: string}>({});
 
   // Local state synced with backend
   const [saved, setSaved] = useState<Location[]>(places);
@@ -69,7 +73,9 @@ export function SavedPlacesPanel({ places, onLocationSelect, onBack, onAddPlace 
           };
         });
         setSaved(mapped);
-      } catch (err) {
+        logger.debug('Loaded saved places from backend', { count: mapped.length });
+      } catch (error) {
+        logger.warn('Failed to load saved places from backend, using local data', { error, fallbackCount: places.length });
         // Fallback to provided props if API fails
         setSaved(places);
       }
@@ -182,8 +188,11 @@ export function SavedPlacesPanel({ places, onLocationSelect, onBack, onAddPlace 
                         try {
                           await placesService.deletePlace(place.id);
                           setSaved((prev) => prev.filter((p) => p.id !== place.id));
-                        } catch (e) {
-                          alert('Failed to delete place');
+                          logger.success(`Deleted ${place.name} from saved places`);
+                          toast.success(`Deleted ${place.name} from saved places`);
+                        } catch (error) {
+                          logger.error('Failed to delete place', { error, placeId: place.id, placeName: place.name });
+                          toast.error(`Failed to delete ${place.name}. Please try again.`);
                         }
                       }}
                     >
@@ -291,8 +300,39 @@ export function SavedPlacesPanel({ places, onLocationSelect, onBack, onAddPlace 
             <DialogDescription>Save a place for quick access later.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Input placeholder="Place name" value={newPlaceName} onChange={(e) => setNewPlaceName(e.target.value)} />
-            <Input placeholder="Address" value={newPlaceAddress} onChange={(e) => setNewPlaceAddress(e.target.value)} />
+            <div>
+              <Input 
+                placeholder="Place name" 
+                value={newPlaceName} 
+                onChange={(e) => {
+                  setNewPlaceName(e.target.value);
+                  if (placeErrors.name) {
+                    setPlaceErrors((prev) => ({ ...prev, name: '' }));
+                  }
+                }}
+                className={placeErrors.name ? 'border-red-300 focus:border-red-500' : ''}
+              />
+              {placeErrors.name && (
+                <p className="text-red-600 text-sm mt-1">{placeErrors.name}</p>
+              )}
+            </div>
+            
+            <div>
+              <Input 
+                placeholder="Address" 
+                value={newPlaceAddress} 
+                onChange={(e) => {
+                  setNewPlaceAddress(e.target.value);
+                  if (placeErrors.address) {
+                    setPlaceErrors((prev) => ({ ...prev, address: '' }));
+                  }
+                }}
+                className={placeErrors.address ? 'border-red-300 focus:border-red-500' : ''}
+              />
+              {placeErrors.address && (
+                <p className="text-red-600 text-sm mt-1">{placeErrors.address}</p>
+              )}
+            </div>
             <Select value={newPlaceCategory} onValueChange={setNewPlaceCategory}>
               <SelectTrigger>
                 <SelectValue placeholder="Category" />
@@ -308,7 +348,21 @@ export function SavedPlacesPanel({ places, onLocationSelect, onBack, onAddPlace 
               <Button variant="ghost" onClick={() => setAddPlaceOpen(false)}>Cancel</Button>
               <Button
                 onClick={async () => {
-                  if (!newPlaceName.trim() || !newPlaceAddress.trim()) return;
+                  // Validate place data
+                  const validationResult = validateForm({
+                    name: newPlaceName,
+                    address: newPlaceAddress,
+                    category: newPlaceCategory
+                  }, savedPlaceSchema);
+
+                  if (!validationResult.isValid) {
+                    setPlaceErrors(validationResult.errors);
+                    const firstError = Object.values(validationResult.errors)[0];
+                    toast.error(firstError);
+                    return;
+                  }
+
+                  setPlaceErrors({});
                   try {
                     const resp = await placesService.savePlace({
                       googlePlaceId: `manual_${Date.now()}`,
@@ -327,7 +381,11 @@ export function SavedPlacesPanel({ places, onLocationSelect, onBack, onAddPlace 
                       category: fp.category,
                     };
                     setSaved((prev) => [mapped, ...prev]);
-                  } catch (e) {
+                    logger.success(`Saved ${newPlaceName} to your places`);
+                    toast.success(`Saved ${newPlaceName} to your places`);
+                  } catch (error) {
+                    logger.warn('Failed to save place to backend, saving locally', { error, placeName: newPlaceName });
+                    toast.error('Failed to sync with server. Saved locally.');
                     // Fallback to local add if API fails
                     const place: Location = {
                       id: Date.now().toString(),
@@ -339,13 +397,13 @@ export function SavedPlacesPanel({ places, onLocationSelect, onBack, onAddPlace 
                     };
                     onAddPlace(place);
                     setSaved((prev) => [place, ...prev]);
-                    alert('Saved locally. Will sync later.');
-                  } finally {
-                    setNewPlaceName('');
-                    setNewPlaceAddress('');
-                    setNewPlaceCategory('home');
-                    setAddPlaceOpen(false);
+                    logger.info('Place saved locally - will sync when online');
+                    toast.success(`${newPlaceName} saved locally`);
                   }
+                  setNewPlaceName('');
+                  setNewPlaceAddress('');
+                  setNewPlaceCategory('home');
+                  setAddPlaceOpen(false);
                 }}
               >
                 Save Place

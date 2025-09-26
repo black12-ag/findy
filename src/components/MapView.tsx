@@ -1,9 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MapPin, Navigation, Car, User, AlertTriangle, Layers, Box, Map as MapIcon, Plus, Minus, RotateCcw, Satellite, Mountain, Moon } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { PlaceDetailsSheet } from './PlaceDetailsSheet';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { logger } from '../utils/logger';
 
 interface Location {
   id: string;
@@ -22,10 +25,11 @@ interface Route {
   duration: string;
   mode: string;
   steps: string[];
+  geometry?: [number, number][];
 }
 
 interface MapViewProps {
-  currentLocation: Location;
+  currentLocation: Location | null;
   selectedLocation: Location | null;
   route: Route | null;
   transportMode: string;
@@ -46,8 +50,14 @@ export function MapView({
   const [zoomLevel, setZoomLevel] = useState(15);
   const [centerPulse, setCenterPulse] = useState(false);
   const [mapStyle, setMapStyle] = useState<'standard' | 'satellite' | 'terrain' | 'dark'>('standard');
-  const [selectedPlace, setSelectedPlace] = useState(null);
+  const [selectedPlace, setSelectedPlace] = useState<any>(null);
   const [isPlaceSheetOpen, setIsPlaceSheetOpen] = useState(false);
+
+  // MapLibre refs
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const currentMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const selectedMarkerRef = useRef<maplibregl.Marker | null>(null);
 
   // Compute a visual zoom scale from the zoom level
   const baseZoom = 15;
@@ -61,6 +71,76 @@ export function MapView({
       return () => clearTimeout(t);
     }
   }, [centerSignal]);
+ 
+  // Initialize MapLibre map
+  useEffect(() => {
+    if (mapRef.current || !mapContainerRef.current || !currentLocation) return;
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: 'https://demotiles.maplibre.org/style.json',
+      center: [currentLocation.lng, currentLocation.lat],
+      zoom: 14,
+    });
+    mapRef.current = map;
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left');
+    currentMarkerRef.current = new maplibregl.Marker({ color: '#3B82F6' })
+      .setLngLat([currentLocation.lng, currentLocation.lat])
+      .addTo(map);
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      currentMarkerRef.current = null;
+      selectedMarkerRef.current = null;
+    };
+  }, [currentLocation]);
+
+  // Update current location marker
+  useEffect(() => {
+    if (!mapRef.current || !currentLocation) return;
+    currentMarkerRef.current?.setLngLat([currentLocation.lng, currentLocation.lat]);
+  }, [currentLocation?.lat, currentLocation?.lng]);
+
+  // Update selected marker
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (selectedLocation) {
+      if (!selectedMarkerRef.current) {
+        selectedMarkerRef.current = new maplibregl.Marker({ color: '#EF4444' });
+      }
+      selectedMarkerRef.current.setLngLat([selectedLocation.lng, selectedLocation.lat]).addTo(map);
+    } else if (selectedMarkerRef.current) {
+      selectedMarkerRef.current.remove();
+      selectedMarkerRef.current = null;
+    }
+  }, [selectedLocation?.lat, selectedLocation?.lng]);
+
+  // Draw route line if geometry available
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (map.getLayer('route-line')) map.removeLayer('route-line');
+    if (map.getSource('route-source')) map.removeSource('route-source');
+    const r: any = route as any;
+    if (r && Array.isArray(r?.geometry) && r.geometry.length > 1) {
+      const geojson: any = {
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: r.geometry },
+        properties: {},
+      };
+      map.addSource('route-source', { type: 'geojson', data: geojson });
+      map.addLayer({
+        id: 'route-line',
+        type: 'line',
+        source: 'route-source',
+        paint: { 'line-color': '#3B82F6', 'line-width': 4, 'line-opacity': 0.85 },
+      });
+      const bounds = new maplibregl.LngLatBounds();
+      r.geometry.forEach((c: [number, number]) => bounds.extend(c));
+      map.fitBounds(bounds, { padding: 50 });
+    }
+  }, [route]);
+
   const getTransportIcon = () => {
     switch (transportMode) {
       case 'driving': return <Car className="w-4 h-4" />;
@@ -98,126 +178,22 @@ export function MapView({
     return mapStyle === 'dark' || mapStyle === 'satellite' ? 'text-gray-700' : 'text-gray-300';
   };
 
-  return (
-    <div className="w-full h-full relative bg-gradient-to-br from-blue-50 to-green-50">
-      {/* Mock Map Background */}
-      <div
-        className={`absolute inset-0 ${getMapBackground()}`}
-        style={{
-          transform: `scale(${zoomScale})`,
-          transformOrigin: '50% 60%'
-        }}
-      >
-        {/* Grid pattern to simulate map */}
-        <div className="absolute inset-0 opacity-20">
-          <svg width="100%" height="100%" className={getMapGridColor()}>
-            <defs>
-              <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="1"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grid)" />
-          </svg>
+  // Show loading state if no current location
+  if (!currentLocation) {
+    return (
+      <div className="w-full h-full relative flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-gray-600">Getting your location...</p>
         </div>
-
-        {/* Mock street patterns */}
-        <div className="absolute inset-0">
-          <div className="absolute top-1/3 left-0 right-0 h-2 bg-gray-300 opacity-60" />
-          <div className="absolute top-2/3 left-0 right-0 h-2 bg-gray-300 opacity-60" />
-          <div className="absolute left-1/4 top-0 bottom-0 w-2 bg-gray-300 opacity-60" />
-          <div className="absolute left-3/4 top-0 bottom-0 w-2 bg-gray-300 opacity-60" />
-        </div>
-
-        {/* Current Location Marker */}
-        <div 
-          className="absolute w-6 h-6 bg-blue-500 rounded-full border-4 border-white shadow-lg z-20"
-          style={{
-            left: '50%',
-            top: '60%',
-            transform: 'translate(-50%, -50%)'
-          }}
-        >
-          <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-75" />
-          {centerPulse && (
-            <div className="absolute -inset-2 rounded-full border-2 border-blue-500 animate-ping" />
-          )}
-        </div>
-
-        {/* Current Location Accuracy Ring */}
-        <div 
-          className="absolute w-20 h-20 border-2 border-blue-300 rounded-full opacity-30 z-10"
-          style={{
-            left: '50%',
-            top: '60%',
-            transform: 'translate(-50%, -50%)'
-          }}
-        />
-
-        {/* Selected Location Marker */}
-        {selectedLocation && (
-          <div 
-            className="absolute z-20 cursor-pointer"
-            style={{
-              left: '30%',
-              top: '30%',
-              transform: 'translate(-50%, -100%)'
-            }}
-            onClick={() => {
-              const mockPlaceDetails = {
-                id: selectedLocation.id,
-                name: selectedLocation.name,
-                address: selectedLocation.address,
-                category: selectedLocation.category || 'Restaurant',
-                rating: 4.5,
-                reviewCount: 127,
-                priceLevel: 2,
-                isOpen: true,
-                openHours: 'Open until 10:00 PM',
-                phone: '(555) 123-4567',
-                website: 'example.com',
-                photos: [],
-                amenities: ['WiFi', 'Parking', 'Accessible', 'Cards'],
-                reviews: []
-              };
-              setSelectedPlace(mockPlaceDetails);
-              setIsPlaceSheetOpen(true);
-            }}
-          >
-            <div className="bg-red-500 text-white p-2 rounded-full shadow-lg hover:bg-red-600 transition-colors">
-              <MapPin className="w-6 h-6" />
-            </div>
-            <div className="bg-white rounded-lg shadow-lg p-3 mt-2 min-w-48 hover:shadow-xl transition-shadow">
-              <h4 className="font-medium text-gray-900">{selectedLocation.name}</h4>
-              <p className="text-sm text-gray-600">{selectedLocation.address}</p>
-              <p className="text-xs text-blue-600 mt-1">Tap for details</p>
-            </div>
-          </div>
-        )}
-
-        {/* Route Line */}
-        {route && (
-          <svg className="absolute inset-0 w-full h-full z-15">
-            <path
-              d="M 50% 60% Q 40% 45% 30% 30%"
-              stroke={getTransportColor()}
-              strokeWidth="4"
-              fill="none"
-              strokeLinecap="round"
-              strokeDasharray={isNavigating ? "0" : "10,5"}
-              className="opacity-80"
-            />
-          </svg>
-        )}
-
-        {/* Traffic Indicators - Only show if traffic layer is enabled */}
-        {showTrafficLayer && (
-          <>
-            <div className="absolute top-1/2 left-1/3 w-3 h-8 bg-red-400 opacity-70 rounded-full z-10" />
-            <div className="absolute top-1/4 right-1/3 w-3 h-6 bg-yellow-400 opacity-70 rounded-full z-10" />
-            <div className="absolute bottom-1/3 left-2/3 w-3 h-4 bg-green-400 opacity-70 rounded-full z-10" />
-          </>
-        )}
       </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-full relative">
+      {/* MapLibre map container */}
+      <div ref={mapContainerRef} className="absolute inset-0" />
 
       {/* Transport Mode Indicator */}
       <div className="absolute bottom-32 left-4 bg-white rounded-full p-3 shadow-lg border border-gray-200">
@@ -324,7 +300,7 @@ export function MapView({
           className="bg-white text-gray-700 shadow-lg border border-gray-200 hover:bg-gray-50"
           onClick={() => {
             // Reset map rotation
-            console.log('Resetting map orientation');
+            logger.debug('Resetting map orientation');
           }}
         >
           <div className="w-5 h-5 relative">
@@ -366,11 +342,11 @@ export function MapView({
         isOpen={isPlaceSheetOpen}
         onClose={() => setIsPlaceSheetOpen(false)}
         onNavigate={() => {
-          console.log('Navigate to place:', selectedPlace?.name);
+          logger.info('Navigate to place:', selectedPlace?.name);
           setIsPlaceSheetOpen(false);
         }}
         onShare={() => {
-          console.log('Share place:', selectedPlace?.name);
+          logger.info('Share place:', selectedPlace?.name);
         }}
       />
     </div>

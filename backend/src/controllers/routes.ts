@@ -1,11 +1,12 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthenticatedRequest } from '@/types';
 import { z } from 'zod';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/error';
 import { sanitizeInput } from '@/utils/security';
 import { logger } from '@/config/logger';
 import { mapsService } from '@/services/maps';
-import { analyticsService } from '@/services/analytics';
+import { analyticsService } from "@/services/analytics-simple";
 import type {
   RouteCalculationRequest,
   SaveRouteRequest,
@@ -33,7 +34,7 @@ const calculateRouteSchema = z.object({
     lng: z.number().min(-180).max(180),
     address: z.string().optional(),
   })).optional(),
-  travelMode: z.enum(['DRIVING', 'WALKING', 'BICYCLING', 'TRANSIT']).default('DRIVING'),
+  travelMode: z.enum(['DRIVING', 'WALKING', 'CYCLING', 'TRANSIT']).default('DRIVING'),
   optimize: z.boolean().default(false),
   avoidTolls: z.boolean().default(false),
   avoidHighways: z.boolean().default(false),
@@ -56,17 +57,16 @@ const saveRouteSchema = z.object({
     lng: z.number().min(-180).max(180),
     address: z.string(),
   })).optional(),
-  travelMode: z.enum(['DRIVING', 'WALKING', 'BICYCLING', 'TRANSIT']),
+  travelMode: z.enum(['DRIVING', 'WALKING', 'CYCLING', 'TRANSIT']),
   distance: z.number(),
   duration: z.number(),
-  isFavorite: z.boolean().default(false),
 });
 
 /**
  * Calculate route between origin and destination
  */
 export const calculateRoute = async (
-  req: Request<{}, RouteCalculationResponse, RouteCalculationRequest>,
+  req: AuthenticatedRequest & { body: RouteCalculationRequest },
   res: Response<RouteCalculationResponse>
 ): Promise<void> => {
   try {
@@ -105,8 +105,8 @@ export const calculateRoute = async (
       event: 'route_calculated',
       properties: {
         travelMode,
-        distance: route.distance.value,
-        duration: route.duration.value,
+        distance: route.distance,
+        duration: route.duration,
         waypointsCount: waypoints?.length || 0,
         optimized: optimize,
       },
@@ -114,9 +114,7 @@ export const calculateRoute = async (
 
     res.status(200).json({
       success: true,
-      data: {
-        route,
-      },
+      data: route,
     });
   } catch (error) {
     logger.error('Error calculating route:', error);
@@ -128,7 +126,7 @@ export const calculateRoute = async (
  * Save a calculated route to user's collection
  */
 export const saveRoute = async (
-  req: Request<{}, SaveRouteResponse, SaveRouteRequest>,
+  req: AuthenticatedRequest & { body: SaveRouteRequest },
   res: Response<SaveRouteResponse>
 ): Promise<void> => {
   try {
@@ -140,7 +138,6 @@ export const saveRoute = async (
       travelMode,
       distance,
       duration,
-      isFavorite,
     } = saveRouteSchema.parse(req.body);
 
     const userId = req.user!.id;
@@ -170,17 +167,32 @@ export const saveRoute = async (
       data: {
         userId,
         name: sanitizeInput(name),
-        originLat: origin.lat,
-        originLng: origin.lng,
-        originAddress: sanitizeInput(origin.address),
-        destinationLat: destination.lat,
-        destinationLng: destination.lng,
-        destinationAddress: sanitizeInput(destination.address),
-        waypoints: waypoints ? JSON.stringify(waypoints) : null,
-        travelMode,
+        startLatitude: origin.lat,
+        startLongitude: origin.lng,
+        startAddress: sanitizeInput(origin.address || ''),
+        endLatitude: destination.lat,
+        endLongitude: destination.lng,
+        endAddress: sanitizeInput(destination.address || ''),
+        transportMode: travelMode,
         distance,
         duration,
-        isFavorite,
+        // Note: waypoints will be handled separately as related records
+        waypoints: waypoints ? {
+          create: waypoints.map((waypoint, index) => ({
+            order: index,
+            latitude: waypoint.lat,
+            longitude: waypoint.lng,
+            address: sanitizeInput(waypoint.address || ''),
+          }))
+        } : undefined,
+      },
+      include: {
+        waypoints: {
+          orderBy: { order: 'asc' },
+          include: {
+            place: true,
+          },
+        },
       },
     });
 
@@ -194,15 +206,18 @@ export const saveRoute = async (
         distance,
         duration,
         waypointsCount: waypoints?.length || 0,
-        isFavorite,
       },
     });
 
+    // Format savedRoute to handle null to undefined conversion
+    const formattedRoute = {
+      ...savedRoute,
+      name: savedRoute.name || undefined,
+    } as any;
+
     res.status(201).json({
       success: true,
-      data: {
-        route: savedRoute,
-      },
+      data: formattedRoute,
     });
   } catch (error) {
     logger.error('Error saving route:', error);
@@ -214,13 +229,13 @@ export const saveRoute = async (
  * Get user's saved routes
  */
 export const getUserRoutes = async (
-  req: Request<{}, UserRoutesResponse, {}, GetUserRoutesRequest>,
+  req: AuthenticatedRequest & { query: GetUserRoutesRequest },
   res: Response<UserRoutesResponse>
 ): Promise<void> => {
   try {
     const { 
-      travelMode, 
-      favorites, 
+      status,
+      transportMode, 
       sortBy = 'createdAt', 
       sortOrder = 'desc',
       page = 1, 
@@ -231,8 +246,8 @@ export const getUserRoutes = async (
 
     logger.info('Getting user routes', {
       userId,
-      travelMode,
-      favorites,
+      transportMode,
+      status,
       sortBy,
       sortOrder,
       page,
@@ -242,12 +257,12 @@ export const getUserRoutes = async (
     // Build where clause
     const where: any = { userId };
     
-    if (travelMode) {
-      where.travelMode = travelMode;
+    if (transportMode) {
+      where.transportMode = transportMode;
     }
     
-    if (favorites === 'true') {
-      where.isFavorite = true;
+    if (status) {
+      where.status = status;
     }
 
     // Build orderBy clause
@@ -262,8 +277,15 @@ export const getUserRoutes = async (
     const [routes, total] = await Promise.all([
       prisma.route.findMany({
         where,
+        include: {
+          waypoints: {
+            orderBy: { order: 'asc' },
+            include: {
+              place: true,
+            },
+          },
+        },
         orderBy: [
-          { isFavorite: 'desc' },
           orderBy,
         ],
         skip,
@@ -272,22 +294,22 @@ export const getUserRoutes = async (
       prisma.route.count({ where }),
     ]);
 
-    // Parse waypoints JSON
+    // Format routes to handle null to undefined conversion
     const formattedRoutes = routes.map(route => ({
       ...route,
-      waypoints: route.waypoints ? JSON.parse(route.waypoints as string) : null,
-    }));
+      name: route.name || undefined,
+    })) as any[];
 
     res.status(200).json({
       success: true,
-      data: {
-        routes: formattedRoutes,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
+      data: formattedRoutes,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page < Math.ceil(total / limit),
+        hasPrevPage: page > 1,
       },
     });
   } catch (error) {
@@ -300,7 +322,7 @@ export const getUserRoutes = async (
  * Delete a saved route
  */
 export const deleteRoute = async (
-  req: Request<{ routeId: string }>,
+  req: AuthenticatedRequest & { params: { routeId: string } },
   res: Response
 ): Promise<void> => {
   try {
@@ -345,76 +367,83 @@ export const deleteRoute = async (
 
 /**
  * Toggle favorite status of a saved route
+ * NOTE: Disabled because isFavorite field doesn't exist in simplified schema
  */
+// export const toggleRouteFavorite = async (
+//   req: AuthenticatedRequest & { params: { routeId: string } },
+//   res: Response
+// ): Promise<void> => {
+//   try {
+//     const { routeId } = req.params;
+//     const userId = req.user!.id;
+
+//     logger.info('Toggling route favorite', {
+//       userId,
+//       routeId,
+//     });
+
+//     // Find the route
+//     const route = await prisma.route.findFirst({
+//       where: {
+//         id: routeId,
+//         userId,
+//       },
+//     });
+
+//     if (!route) {
+//       throw new AppError('Route not found', 404);
+//     }
+
+//     // Toggle favorite status
+//     const updatedRoute = await prisma.route.update({
+//       where: {
+//         id: routeId,
+//       },
+//       data: {
+//         isFavorite: !route.isFavorite,
+//       },
+//     });
+
+//     // Track analytics
+//     await analyticsService.trackEvent({
+//       userId,
+//       event: 'route_favorite_toggled',
+//       properties: {
+//         routeId,
+//         isFavorite: updatedRoute.isFavorite,
+//       },
+//     });
+
+//     res.status(200).json({
+//       success: true,
+//       data: updatedRoute,
+//     });
+//   } catch (error) {
+//     logger.error('Error toggling route favorite:', error);
+//     throw new AppError('Failed to toggle favorite', 500);
+//   }
+// };
+
+// Temporary replacement function for routes without favorite functionality
 export const toggleRouteFavorite = async (
-  req: Request<{ routeId: string }>,
+  req: AuthenticatedRequest & { params: { routeId: string } },
   res: Response
 ): Promise<void> => {
-  try {
-    const { routeId } = req.params;
-    const userId = req.user!.id;
-
-    logger.info('Toggling route favorite', {
-      userId,
-      routeId,
-    });
-
-    // Find the route
-    const route = await prisma.route.findFirst({
-      where: {
-        id: routeId,
-        userId,
-      },
-    });
-
-    if (!route) {
-      throw new AppError('Route not found', 404);
-    }
-
-    // Toggle favorite status
-    const updatedRoute = await prisma.route.update({
-      where: {
-        id: routeId,
-      },
-      data: {
-        isFavorite: !route.isFavorite,
-      },
-    });
-
-    // Track analytics
-    await analyticsService.trackEvent({
-      userId,
-      event: 'route_favorite_toggled',
-      properties: {
-        routeId,
-        isFavorite: updatedRoute.isFavorite,
-      },
-    });
-
-    res.status(200).json({
-      success: true,
-      data: {
-        route: {
-          ...updatedRoute,
-          waypoints: updatedRoute.waypoints ? JSON.parse(updatedRoute.waypoints as string) : null,
-        },
-      },
-    });
-  } catch (error) {
-    logger.error('Error toggling route favorite:', error);
-    throw new AppError('Failed to toggle favorite', 500);
-  }
+  res.status(501).json({
+    success: false,
+    message: 'Favorite functionality not available in current schema',
+  });
 };
 
 /**
  * Optimize route with multiple waypoints
  */
 export const optimizeRoute = async (
-  req: Request<{}, RouteCalculationResponse, OptimizeRouteRequest>,
+  req: AuthenticatedRequest & { body: OptimizeRouteRequest },
   res: Response<RouteCalculationResponse>
 ): Promise<void> => {
   try {
-    const { origin, destination, waypoints } = req.body;
+    const { waypoints, transportMode = 'DRIVING', avoidTolls, avoidHighways } = req.body;
 
     if (!waypoints || waypoints.length < 2) {
       throw new AppError('At least 2 waypoints required for optimization', 400);
@@ -425,13 +454,19 @@ export const optimizeRoute = async (
       waypointsCount: waypoints.length,
     });
 
-    // Calculate optimized route
+    // Calculate optimized route using first waypoint as origin and last as destination
+    const origin = waypoints[0];
+    const destination = waypoints[waypoints.length - 1];
+    const intermediateWaypoints = waypoints.slice(1, -1);
+    
     const route = await mapsService.calculateRoute({
       origin,
       destination,
-      waypoints,
-      travelMode: 'DRIVING',
+      waypoints: intermediateWaypoints,
+      travelMode: transportMode,
       optimize: true,
+      avoidTolls,
+      avoidHighways,
     });
 
     // Track analytics
@@ -440,16 +475,14 @@ export const optimizeRoute = async (
       event: 'route_optimized',
       properties: {
         waypointsCount: waypoints.length,
-        distance: route.distance.value,
-        duration: route.duration.value,
+        distance: route.distance,
+        duration: route.duration,
       },
     });
 
     res.status(200).json({
       success: true,
-      data: {
-        route,
-      },
+      data: route,
     });
   } catch (error) {
     logger.error('Error optimizing route:', error);

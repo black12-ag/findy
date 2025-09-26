@@ -1,0 +1,193 @@
+// Development SQLite schema - simplified version
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// User Management
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  username          String?  @unique
+  firstName         String?
+  lastName          String?
+  avatar            String?
+  phoneNumber       String?
+  isVerified        Boolean  @default(false)
+  isActive          Boolean  @default(true)
+  role              String   @default("USER") // simplified enum
+  
+  // Authentication
+  password          String
+  refreshToken      String?
+  emailVerifyToken  String?
+  passwordResetToken String?
+  passwordResetExpires DateTime?
+  
+  // Relationships
+  places            Place[]
+  savedPlaces       SavedPlace[]
+  routeHistory      Route[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("users")
+}
+
+model UserPreferences {
+  id                String  @id @default(cuid())
+  userId            String  @unique
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Navigation preferences
+  defaultTransportMode String @default("DRIVING") // simplified enum
+  voiceGuidance     Boolean @default(true)
+  avoidTolls        Boolean @default(false)
+  avoidHighways     Boolean @default(false)
+  avoidFerries      Boolean @default(false)
+  
+  // Display preferences
+  mapStyle          String  @default("standard")
+  darkMode          Boolean @default(false)
+  language          String  @default("en")
+  units             String  @default("metric")
+  
+  // Privacy preferences
+  shareLocation     Boolean @default(false)
+  shareActivity     Boolean @default(true)
+  allowFriendRequests Boolean @default(true)
+  
+  // Notification preferences
+  trafficAlerts     Boolean @default(true)
+  weatherAlerts     Boolean @default(true)
+  socialNotifications Boolean @default(true)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("user_preferences")
+}
+
+// Places and Locations
+model Place {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  address       String
+  latitude      Float
+  longitude     Float
+  category      String?
+  subcategory   String?
+  rating        Float?
+  priceLevel    Int?     // 1-4 scale
+  phoneNumber   String?
+  website       String?
+  photosJson    String?  // JSON string instead of array
+  amenitiesJson String?  // JSON string instead of array
+  isVerified    Boolean  @default(false)
+  
+  // User-specific fields for saved places
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  isFavorite    Boolean  @default(false)
+  
+  // External IDs
+  googlePlaceId String?  @unique
+  mapboxId      String?  @unique
+  
+  // Relationships
+  savedPlaces   SavedPlace[]
+  routeWaypoints RouteWaypoint[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("places")
+}
+
+model SavedPlace {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  placeId       String?
+  place         Place?   @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  
+  name          String
+  notes         String?
+  category      String   @default("OTHER") // simplified enum
+  isHome        Boolean  @default(false)
+  isWork        Boolean  @default(false)
+  
+  // For custom locations without a Place record
+  customLatitude  Float?
+  customLongitude Float?
+  customAddress   String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, placeId])
+  @@map("saved_places")
+}
+
+// Routes and Navigation
+model Route {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name              String?
+  startLatitude     Float
+  startLongitude    Float
+  startAddress      String?
+  endLatitude       Float
+  endLongitude      Float
+  endAddress        String?
+  
+  transportMode     String   @default("DRIVING") // simplified enum
+  distance          Float    // in meters
+  duration          Int      // in seconds
+  routeGeometryJson String?  // JSON string instead of JSON type
+  
+  waypoints         RouteWaypoint[]
+  
+  status            String   @default("PLANNED") // simplified enum
+  
+  // Route preferences
+  avoidTolls        Boolean  @default(false)
+  avoidHighways     Boolean  @default(false)
+  avoidFerries      Boolean  @default(false)
+  
+  // Timing
+  startedAt         DateTime?
+  completedAt       DateTime?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("routes")
+}
+
+model RouteWaypoint {
+  id            String @id @default(cuid())
+  routeId       String
+  route         Route  @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  placeId       String?
+  place         Place? @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  
+  order         Int
+  latitude      Float
+  longitude     Float
+  address       String?
+  estimatedArrival DateTime?
+  
+  createdAt     DateTime @default(now())
+
+  @@map("route_waypoints")
+  @@index([routeId, order])
+}

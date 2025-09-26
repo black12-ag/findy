@@ -483,9 +483,11 @@ export const securityAudit = {
 };
 
 // Initialize security features
+import { logger } from './logger';
+
 export const initializeSecurity = () => {
   // Enforce HTTPS in production
-  if (process.env.NODE_ENV === 'production') {
+  if (import.meta.env?.MODE === 'production') {
     enforceHTTPS();
   }
 
@@ -498,7 +500,7 @@ export const initializeSecurity = () => {
   }
 
   // Disable right-click in production (optional)
-  if (process.env.NODE_ENV === 'production') {
+  if (import.meta.env?.MODE === 'production') {
     document.addEventListener('contextmenu', (e) => {
       e.preventDefault();
     });
@@ -509,7 +511,7 @@ export const initializeSecurity = () => {
     window.top!.location = window.self.location;
   }
 
-  console.log('[Security] Security features initialized');
+  logger.info('[Security] Security features initialized');
 };
 
 // Export instances

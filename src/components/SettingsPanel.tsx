@@ -30,6 +30,9 @@ import { Separator } from './ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Slider } from './ui/slider';
 import { Badge } from './ui/badge';
+import { useUser } from '../contexts/UserContext';
+import { logger } from '../utils/logger';
+import { toast } from 'sonner';
 
 interface SettingsPanelProps {
   onBack: () => void;
@@ -38,36 +41,62 @@ interface SettingsPanelProps {
   onNavigateToFleet?: () => void;
   onNavigateToAPIDocs?: () => void;
   onNavigateToORSConfig?: () => void;
+  onNavigateToDeveloper?: () => void;
+  onNavigateToPushSettings?: () => void;
+  onNavigateToDeviceTest?: () => void;
+  onNavigateToCrashReports?: () => void;
 }
 
-export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegrations, onNavigateToFleet, onNavigateToAPIDocs, onNavigateToORSConfig }: SettingsPanelProps) {
-  const [darkMode, setDarkMode] = useState(false);
-  const [voiceGuidance, setVoiceGuidance] = useState(true);
-  const [notifications, setNotifications] = useState(true);
-  const [avoidTolls, setAvoidTolls] = useState(false);
-  const [avoidHighways, setAvoidHighways] = useState(false);
+export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegrations, onNavigateToFleet, onNavigateToAPIDocs, onNavigateToORSConfig, onNavigateToDeveloper, onNavigateToPushSettings, onNavigateToDeviceTest, onNavigateToCrashReports }: SettingsPanelProps) {
+  const { preferences, updatePreference, updatePreferences } = useUser();
   const [currentView, setCurrentView] = useState<'main' | 'voice' | 'accessibility'>('main');
   
-  // Voice & Audio Settings
-  const [voiceType, setVoiceType] = useState('female');
-  const [voiceLanguage, setVoiceLanguage] = useState('en-US');
-  const [voiceSpeed, setVoiceSpeed] = useState([1.0]);
-  const [masterVolume, setMasterVolume] = useState([70]);
-  const [navigationVolume, setNavigationVolume] = useState([80]);
-  const [alertVolume, setAlertVolume] = useState([75]);
-  const [soundEffects, setSoundEffects] = useState(true);
-  const [readStreetNames, setReadStreetNames] = useState(true);
-  const [announceTraffic, setAnnounceTraffic] = useState(true);
+  // Derived state from UserContext preferences
+  const darkMode = preferences.darkMode;
+  const voiceGuidance = preferences.voiceGuidance;
+  const notifications = preferences.socialNotifications; // Using social notifications as general notifications
+  const avoidTolls = preferences.avoidTolls;
+  const avoidHighways = preferences.avoidHighways;
   
-  // Accessibility Settings
-  const [highContrast, setHighContrast] = useState(false);
-  const [largeText, setLargeText] = useState(false);
-  const [screenReader, setScreenReader] = useState(false);
-  const [reduceMotion, setReduceMotion] = useState(false);
-  const [colorBlindMode, setColorBlindMode] = useState('none');
-  const [textSize, setTextSize] = useState([100]);
-  const [buttonSize, setButtonSize] = useState([100]);
-  const [vibration, setVibration] = useState(true);
+  // Voice & Audio Settings - using localStorage for persistence
+  const [voiceType, setVoiceType] = useState(() => localStorage.getItem('voice_type') || 'female');
+  const [voiceLanguage, setVoiceLanguage] = useState(() => localStorage.getItem('voice_language') || preferences.language || 'en-US');
+  const [voiceSpeed, setVoiceSpeed] = useState(() => [parseFloat(localStorage.getItem('voice_speed') || '1.0')]);
+  const [masterVolume, setMasterVolume] = useState(() => [parseInt(localStorage.getItem('master_volume') || '70')]);
+  const [navigationVolume, setNavigationVolume] = useState(() => [parseInt(localStorage.getItem('navigation_volume') || '80')]);
+  const [alertVolume, setAlertVolume] = useState(() => [parseInt(localStorage.getItem('alert_volume') || '75')]);
+  const [soundEffects, setSoundEffects] = useState(() => localStorage.getItem('sound_effects') !== 'false');
+  const [readStreetNames, setReadStreetNames] = useState(() => localStorage.getItem('read_street_names') !== 'false');
+  const [announceTraffic, setAnnounceTraffic] = useState(() => localStorage.getItem('announce_traffic') !== 'false');
+  
+  // Accessibility Settings - using localStorage for persistence
+  const [highContrast, setHighContrast] = useState(() => localStorage.getItem('high_contrast') === 'true');
+  const [largeText, setLargeText] = useState(() => localStorage.getItem('large_text') === 'true');
+  const [screenReader, setScreenReader] = useState(() => localStorage.getItem('screen_reader') === 'true');
+  const [reduceMotion, setReduceMotion] = useState(() => localStorage.getItem('reduce_motion') === 'true');
+  const [colorBlindMode, setColorBlindMode] = useState(() => localStorage.getItem('color_blind_mode') || 'none');
+  const [textSize, setTextSize] = useState(() => [parseInt(localStorage.getItem('text_size') || '100')]);
+  const [buttonSize, setButtonSize] = useState(() => [parseInt(localStorage.getItem('button_size') || '100')]);
+  const [vibration, setVibration] = useState(() => localStorage.getItem('vibration') !== 'false');
+
+  // Helper functions to persist settings to localStorage
+  const updateVoiceSetting = (key: string, value: any) => {
+    localStorage.setItem(key, value.toString());
+    logger.debug('Voice setting updated', { key, value });
+    // Show success toast for important settings
+    if (key === 'voice_type' || key === 'voice_language') {
+      toast.success('Voice setting updated');
+    }
+  };
+
+  const updateAccessibilitySetting = (key: string, value: any) => {
+    localStorage.setItem(key, value.toString());
+    logger.debug('Accessibility setting updated', { key, value });
+    // Show success toast for accessibility changes
+    if (key === 'high_contrast' || key === 'large_text' || key === 'screen_reader') {
+      toast.success('Accessibility setting updated');
+    }
+  };
 
   const settingSections = [
     {
@@ -96,8 +125,15 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
       title: 'Privacy & Data',
       items: [
         { id: 'privacy', icon: Shield, label: 'Privacy Settings', description: 'Location history and data usage' },
-        { id: 'notifications', icon: Bell, label: 'Notifications', description: 'Traffic alerts and trip updates' },
+        { id: 'push-settings', icon: Bell, label: 'Push Notifications', description: 'Configure app notifications and alerts', onClick: onNavigateToPushSettings },
         { id: 'offline', icon: Download, label: 'Offline Maps', description: 'Download maps for offline use', onClick: onNavigateToOffline },
+      ]
+    },
+    {
+      title: 'Device Integration',
+      items: [
+        { id: 'device-test', icon: Settings, label: 'Device Integration Test', description: 'Test device sensors and APIs', onClick: onNavigateToDeviceTest },
+        { id: 'crash-reports', icon: Shield, label: 'Crash Reports', description: 'View app error logs and diagnostics', onClick: onNavigateToCrashReports },
       ]
     },
     {
@@ -105,6 +141,7 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
       items: [
         { id: 'connected', icon: Settings, label: 'Connected Services', description: 'Manage app integrations', onClick: onNavigateToIntegrations },
         { id: 'ors-config', icon: Settings, label: 'OpenRouteService API', description: 'Configure live navigation APIs', onClick: onNavigateToORSConfig },
+        { id: 'developer', icon: Settings, label: 'Developer Tools', description: 'Debugging and diagnostics', onClick: onNavigateToDeveloper },
       ]
     },
     {
@@ -117,11 +154,28 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
   ];
 
   const quickSettings = [
-    { id: 'dark-mode', label: 'Dark Mode', value: darkMode, onChange: setDarkMode },
-    { id: 'voice', label: 'Voice Guidance', value: voiceGuidance, onChange: setVoiceGuidance },
-    { id: 'notifications', label: 'Push Notifications', value: notifications, onChange: setNotifications },
-    { id: 'tolls', label: 'Avoid Tolls', value: avoidTolls, onChange: setAvoidTolls },
-    { id: 'highways', label: 'Avoid Highways', value: avoidHighways, onChange: setAvoidHighways },
+    { id: 'dark-mode', label: 'Dark Mode', value: darkMode, onChange: (value: boolean) => {
+      updatePreference('darkMode', value);
+      logger.debug('Dark mode preference updated', { value });
+      toast.success(`Dark mode ${value ? 'enabled' : 'disabled'}`);
+    }},
+    { id: 'voice', label: 'Voice Guidance', value: voiceGuidance, onChange: (value: boolean) => {
+      updatePreference('voiceGuidance', value);
+      logger.debug('Voice guidance preference updated', { value });
+      toast.success(`Voice guidance ${value ? 'enabled' : 'disabled'}`);
+    }},
+    { id: 'notifications', label: 'Push Notifications', value: notifications, onChange: (value: boolean) => {
+      updatePreference('socialNotifications', value);
+      logger.debug('Notifications preference updated', { value });
+    }},
+    { id: 'tolls', label: 'Avoid Tolls', value: avoidTolls, onChange: (value: boolean) => {
+      updatePreference('avoidTolls', value);
+      logger.debug('Avoid tolls preference updated', { value });
+    }},
+    { id: 'highways', label: 'Avoid Highways', value: avoidHighways, onChange: (value: boolean) => {
+      updatePreference('avoidHighways', value);
+      logger.debug('Avoid highways preference updated', { value });
+    }},
   ];
 
   if (currentView === 'voice') {
@@ -154,7 +208,10 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Voice Type</label>
-                <Select value={voiceType} onValueChange={setVoiceType}>
+                <Select value={voiceType} onValueChange={(value) => {
+                  setVoiceType(value);
+                  updateVoiceSetting('voice_type', value);
+                }}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -167,7 +224,10 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Language</label>
-                <Select value={voiceLanguage} onValueChange={setVoiceLanguage}>
+                <Select value={voiceLanguage} onValueChange={(value) => {
+                  setVoiceLanguage(value);
+                  updateVoiceSetting('voice_language', value);
+                }}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -185,7 +245,10 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
                 <div className="px-3">
                   <Slider
                     value={voiceSpeed}
-                    onValueChange={setVoiceSpeed}
+                    onValueChange={(value) => {
+                      setVoiceSpeed(value);
+                      updateVoiceSetting('voice_speed', value[0]);
+                    }}
                     max={2.0}
                     min={0.5}
                     step={0.1}
@@ -217,7 +280,10 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
                 <div className="px-3">
                   <Slider
                     value={masterVolume}
-                    onValueChange={setMasterVolume}
+                    onValueChange={(value) => {
+                      setMasterVolume(value);
+                      updateVoiceSetting('master_volume', value[0]);
+                    }}
                     max={100}
                     min={0}
                     step={5}
@@ -235,7 +301,10 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
                 <div className="px-3">
                   <Slider
                     value={navigationVolume}
-                    onValueChange={setNavigationVolume}
+                    onValueChange={(value) => {
+                      setNavigationVolume(value);
+                      updateVoiceSetting('navigation_volume', value[0]);
+                    }}
                     max={100}
                     min={0}
                     step={5}
@@ -249,7 +318,10 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
                 <div className="px-3">
                   <Slider
                     value={alertVolume}
-                    onValueChange={setAlertVolume}
+                    onValueChange={(value) => {
+                      setAlertVolume(value);
+                      updateVoiceSetting('alert_volume', value[0]);
+                    }}
                     max={100}
                     min={0}
                     step={5}
@@ -270,7 +342,10 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
                   <span className="text-gray-700">Sound Effects</span>
                   <p className="text-sm text-gray-500">Button clicks and UI sounds</p>
                 </div>
-                <Switch checked={soundEffects} onCheckedChange={setSoundEffects} />
+                <Switch checked={soundEffects} onCheckedChange={(value) => {
+                  setSoundEffects(value);
+                  updateVoiceSetting('sound_effects', value);
+                }} />
               </div>
               <div className="flex items-center justify-between">
                 <div>
@@ -326,7 +401,10 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
                   <span className="text-gray-700">High Contrast Mode</span>
                   <p className="text-sm text-gray-500">Increase contrast for better visibility</p>
                 </div>
-                <Switch checked={highContrast} onCheckedChange={setHighContrast} />
+                <Switch checked={highContrast} onCheckedChange={(value) => {
+                  setHighContrast(value);
+                  updateAccessibilitySetting('high_contrast', value);
+                }} />
               </div>
               <div className="flex items-center justify-between">
                 <div>
@@ -371,7 +449,10 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
                 <div className="px-3">
                   <Slider
                     value={textSize}
-                    onValueChange={setTextSize}
+                    onValueChange={(value) => {
+                      setTextSize(value);
+                      updateAccessibilitySetting('text_size', value[0]);
+                    }}
                     max={150}
                     min={75}
                     step={5}

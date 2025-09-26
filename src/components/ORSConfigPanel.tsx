@@ -6,6 +6,8 @@ import { Badge } from './ui/badge';
 import { ArrowLeft, Key, Check, AlertTriangle, ExternalLink, MapPin, Route, Search } from 'lucide-react';
 import { setORSApiKey, ORSGeocodingService, ORSDirectionsService, ORSPOIService } from '../services/openRouteService';
 import { useLoadingState } from '../contexts/LoadingContext';
+import { logger } from '../utils/logger';
+import { toast } from 'sonner';
 
 interface ORSConfigPanelProps {
   onBack: () => void;
@@ -28,7 +30,7 @@ export const ORSConfigPanel: React.FC<ORSConfigPanelProps> = ({ onBack }) => {
 
   useEffect(() => {
     // Check if API key is already configured
-    const existingKey = process.env.VITE_ORS_API_KEY || localStorage.getItem('ors_api_key');
+    const existingKey = import.meta.env?.VITE_ORS_API_KEY || localStorage.getItem('ors_api_key');
     if (existingKey) {
       setSavedApiKey('••••••••••••••••' + existingKey.slice(-4));
       setORSApiKey(existingKey);
@@ -64,7 +66,8 @@ export const ORSConfigPanel: React.FC<ORSConfigPanelProps> = ({ onBack }) => {
         setTestResults(prev => ({ ...prev, geocoding: 'error' }));
       }
     } catch (error) {
-      console.error('Geocoding test failed:', error);
+      logger.error('Geocoding test failed:', error);
+      toast.error('Geocoding API test failed. Check your key and network.');
       setTestResults(prev => ({ ...prev, geocoding: 'error' }));
     } finally {
       stopLoading();
@@ -90,7 +93,8 @@ export const ORSConfigPanel: React.FC<ORSConfigPanelProps> = ({ onBack }) => {
         setTestResults(prev => ({ ...prev, directions: 'error' }));
       }
     } catch (error) {
-      console.error('Directions test failed:', error);
+      logger.error('Directions test failed:', error);
+      toast.error('Directions API test failed.');
       setTestResults(prev => ({ ...prev, directions: 'error' }));
     } finally {
       stopLoading();
@@ -117,7 +121,8 @@ export const ORSConfigPanel: React.FC<ORSConfigPanelProps> = ({ onBack }) => {
         setTestResults(prev => ({ ...prev, pois: 'error' }));
       }
     } catch (error) {
-      console.error('POIs test failed:', error);
+      logger.error('POIs test failed:', error);
+      toast.error('POI API test failed.');
       setTestResults(prev => ({ ...prev, pois: 'error' }));
     } finally {
       stopLoading();

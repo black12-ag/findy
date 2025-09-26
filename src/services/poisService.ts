@@ -14,6 +14,7 @@ import {
   POICategory
 } from '../config/apiConfig';
 import { quotaManager } from './quotaManager';
+import { logger } from '../utils/logger';
 
 export interface POISearchOptions {
   coordinates: [number, number]; // [lng, lat]
@@ -151,7 +152,7 @@ class POIsService {
         
         return results;
       } catch (error) {
-        console.warn('OpenRouteService POIs failed, trying fallback:', error);
+        this.logError('pois_failed', 'OpenRouteService POIs failed, trying fallback', { error: error.message, coordinates, categories, radius });
         quotaManager.recordUsage('POIS', false);
       }
     }
@@ -576,6 +577,24 @@ class POIsService {
     if (this.cache.size > 100) {
       const oldestKey = this.cache.keys().next().value;
       this.cache.delete(oldestKey);
+    }
+  }
+
+  /**
+   * Log errors to monitoring service instead of console
+   */
+  private logError(errorType: string, message: string, metadata?: any) {
+    const errorData = {
+      service: 'POIsService',
+      type: errorType,
+      message,
+      timestamp: new Date().toISOString(),
+      metadata
+    };
+    
+    // For development, structured logging
+    if (import.meta.env.DEV) {
+      logger.error('[POIsService] ' + message, errorData);
     }
   }
 

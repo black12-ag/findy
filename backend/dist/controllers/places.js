@@ -7,7 +7,7 @@ const error_1 = require("@/utils/error");
 const security_1 = require("@/utils/security");
 const logger_1 = require("@/config/logger");
 const maps_1 = require("@/services/maps");
-const analytics_1 = require("@/services/analytics");
+const analytics_simple_1 = require("@/services/analytics-simple");
 const searchPlacesSchema = zod_1.z.object({
     query: zod_1.z.string().min(1).max(200),
     location: zod_1.z.object({
@@ -47,7 +47,7 @@ const searchPlaces = async (req, res) => {
             radius,
             type,
         });
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId: req.user?.id,
             event: 'place_search',
             properties: {
@@ -59,9 +59,12 @@ const searchPlaces = async (req, res) => {
         });
         res.status(200).json({
             success: true,
-            data: {
-                places,
-                count: places.length,
+            data: places,
+            meta: {
+                page: 1,
+                limit: places.length,
+                total: places.length,
+                totalPages: 1,
             },
         });
     }
@@ -92,7 +95,7 @@ const getPlaceDetails = async (req, res) => {
             });
             isSaved = !!savedPlace;
         }
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId: req.user?.id,
             event: 'place_details_view',
             properties: {
@@ -147,7 +150,7 @@ const savePlace = async (req, res) => {
                 isFavorite,
             },
         });
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId,
             event: 'place_saved',
             properties: {
@@ -187,7 +190,7 @@ const deletePlace = async (req, res) => {
         if (deletedPlace.count === 0) {
             throw new error_1.AppError('Place not found', 404);
         }
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId,
             event: 'place_deleted',
             properties: {
@@ -225,27 +228,32 @@ const getUserPlaces = async (req, res) => {
             where.isFavorite = true;
         }
         const [places, total] = await Promise.all([
-            database_1.prisma.place.findMany({
+            database_1.prisma.savedPlace.findMany({
                 where,
+                include: {
+                    place: true,
+                },
                 orderBy: [
-                    { isFavorite: 'desc' },
                     { createdAt: 'desc' },
                 ],
                 skip,
                 take: limit,
             }),
-            database_1.prisma.place.count({ where }),
+            database_1.prisma.savedPlace.count({ where }),
         ]);
+        const formattedPlaces = places.map(place => ({
+            ...place,
+            notes: place.notes || undefined,
+            category: place.category,
+        }));
         res.status(200).json({
             success: true,
-            data: {
-                places,
-                pagination: {
-                    page,
-                    limit,
-                    total,
-                    totalPages: Math.ceil(total / limit),
-                },
+            data: formattedPlaces,
+            meta: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
             },
         });
     }
@@ -280,7 +288,7 @@ const toggleFavorite = async (req, res) => {
                 isFavorite: !place.isFavorite,
             },
         });
-        await analytics_1.analyticsService.trackEvent({
+        await analytics_simple_1.analyticsService.trackEvent({
             userId,
             event: 'place_favorite_toggled',
             properties: {

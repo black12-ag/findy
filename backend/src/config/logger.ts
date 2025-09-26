@@ -91,4 +91,7 @@ export const morganStream = {
   },
 };
 
+// Named export for compatibility
+export { logger };
+
 export default logger;

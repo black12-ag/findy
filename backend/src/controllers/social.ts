@@ -1,10 +1,11 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthenticatedRequest } from '@/types';
 import { z } from 'zod';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/error';
 import { sanitizeInput } from '@/utils/security';
 import { logger } from '@/config/logger';
-import { analyticsService } from '@/services/analytics';
+import { analyticsService } from "@/services/analytics-simple";
 import type {
   SendFriendRequestRequest,
   FriendRequestResponse,
@@ -39,7 +40,7 @@ const sharePlaceSchema = z.object({
  * Send friend request
  */
 export const sendFriendRequest = async (
-  req: Request<{}, FriendRequestResponse, SendFriendRequestRequest>,
+  req: AuthenticatedRequest & { body: SendFriendRequestRequest },
   res: Response<FriendRequestResponse>
 ): Promise<void> => {
   try {
@@ -113,6 +114,8 @@ export const sendFriendRequest = async (
     // Create friend request
     const friendRequest = await prisma.friendship.create({
       data: {
+        userId: requesterId,
+        friendId: targetUser.id,
         requesterId,
         addresseeId: targetUser.id,
         status: 'PENDING',
@@ -150,9 +153,7 @@ export const sendFriendRequest = async (
 
     res.status(201).json({
       success: true,
-      data: {
-        friendRequest,
-      },
+      data: friendRequest,
     });
   } catch (error) {
     logger.error('Error sending friend request:', error);
@@ -164,7 +165,7 @@ export const sendFriendRequest = async (
  * Respond to friend request
  */
 export const respondToFriendRequest = async (
-  req: Request<{ requestId: string }, {}, { action: 'ACCEPT' | 'REJECT' }>,
+  req: AuthenticatedRequest & { params: { requestId: string }; body: { action: 'ACCEPT' | 'REJECT' } },
   res: Response
 ): Promise<void> => {
   try {
@@ -199,7 +200,7 @@ export const respondToFriendRequest = async (
     const updatedRequest = await prisma.friendship.update({
       where: { id: requestId },
       data: {
-        status: action === 'ACCEPT' ? 'ACCEPTED' : 'REJECTED',
+        status: action === 'ACCEPT' ? 'ACCEPTED' : 'BLOCKED',
       },
       include: {
         requester: {
@@ -236,9 +237,7 @@ export const respondToFriendRequest = async (
 
     res.status(200).json({
       success: true,
-      data: {
-        friendRequest: updatedRequest,
-      },
+      data: updatedRequest,
     });
   } catch (error) {
     logger.error('Error responding to friend request:', error);
@@ -250,7 +249,7 @@ export const respondToFriendRequest = async (
  * Get user's friends
  */
 export const getFriends = async (
-  req: Request<{}, FriendsResponse, {}, GetFriendsRequest>,
+  req: AuthenticatedRequest & { query: GetFriendsRequest },
   res: Response<FriendsResponse>
 ): Promise<void> => {
   try {
@@ -320,14 +319,12 @@ export const getFriends = async (
 
     res.status(200).json({
       success: true,
-      data: {
-        friends,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
+      data: friends,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     });
   } catch (error) {
@@ -340,7 +337,7 @@ export const getFriends = async (
  * Remove friend
  */
 export const removeFriend = async (
-  req: Request<{ friendshipId: string }>,
+  req: AuthenticatedRequest & { params: { friendshipId: string } },
   res: Response
 ): Promise<void> => {
   try {
@@ -391,7 +388,7 @@ export const removeFriend = async (
  * Share a route with friends
  */
 export const shareRoute = async (
-  req: Request<{}, SharedItemResponse, ShareRouteRequest>,
+  req: AuthenticatedRequest & { body: ShareRouteRequest },
   res: Response<SharedItemResponse>
 ): Promise<void> => {
   try {
@@ -442,29 +439,13 @@ export const shareRoute = async (
       friendIds.map(friendId =>
         prisma.sharedContent.create({
           data: {
-            sharerId: userId,
-            recipientId: friendId,
-            contentType: 'ROUTE',
-            contentId: routeId,
+            userId,
+            type: 'route',
+            itemId: routeId,
+            title: route.name,
             message: message ? sanitizeInput(message) : null,
-          },
-          include: {
-            sharer: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-              },
-            },
-            recipient: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-              },
-            },
+            recipients: [friendId],
+            shareToken: Math.random().toString(36).substring(2, 15),
           },
         })
       )
@@ -497,7 +478,7 @@ export const shareRoute = async (
  * Share a place with friends
  */
 export const sharePlace = async (
-  req: Request<{}, SharedItemResponse, SharePlaceRequest>,
+  req: AuthenticatedRequest & { body: SharePlaceRequest },
   res: Response<SharedItemResponse>
 ): Promise<void> => {
   try {
@@ -548,29 +529,13 @@ export const sharePlace = async (
       friendIds.map(friendId =>
         prisma.sharedContent.create({
           data: {
-            sharerId: userId,
-            recipientId: friendId,
-            contentType: 'PLACE',
-            contentId: placeId,
+            userId,
+            type: 'place',
+            itemId: placeId,
+            title: place.name,
             message: message ? sanitizeInput(message) : null,
-          },
-          include: {
-            sharer: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-              },
-            },
-            recipient: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-              },
-            },
+            recipients: [friendId],
+            shareToken: Math.random().toString(36).substring(2, 15),
           },
         })
       )
@@ -603,7 +568,7 @@ export const sharePlace = async (
  * Get shared content received by user
  */
 export const getSharedContent = async (
-  req: Request<{}, {}, {}, { type?: 'ROUTE' | 'PLACE'; page?: number; limit?: number }>,
+  req: AuthenticatedRequest & { query: { type?: 'route' | 'place'; page?: number; limit?: number } },
   res: Response
 ): Promise<void> => {
   try {
@@ -618,16 +583,16 @@ export const getSharedContent = async (
       limit,
     });
 
-    const where: any = { recipientId: userId };
+    const where: any = { recipients: { has: userId } };
     if (type) {
-      where.contentType = type;
+      where.type = type;
     }
 
     const [sharedContent, total] = await Promise.all([
       prisma.sharedContent.findMany({
         where,
         include: {
-          sharer: {
+          user: {
             select: {
               id: true,
               firstName: true,
@@ -647,14 +612,12 @@ export const getSharedContent = async (
 
     res.status(200).json({
       success: true,
-      data: {
-        sharedContent,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
+      data: sharedContent,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     });
   } catch (error) {

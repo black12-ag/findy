@@ -1,4 +1,6 @@
 import axios, { AxiosResponse } from 'axios';
+import { toast } from 'sonner';
+import { logger } from '../utils/logger';
 
 // OpenRouteService API configuration
 const ORS_BASE_URL = 'https://api.openrouteservice.org';
@@ -25,7 +27,16 @@ const orsApi = axios.create({
 orsApi.interceptors.request.use(
   (config) => {
     if (!ORS_API_KEY) {
+      // In development, throw a more developer-friendly error
+      if (process.env.NODE_ENV === 'development') {
+        throw new Error('OpenRouteService API key is not configured - using fallback data');
+      }
       throw new Error('OpenRouteService API key is not configured');
+    }
+    
+    // Skip API calls for development fallback key
+    if (ORS_API_KEY === 'development-fallback-key') {
+      throw new Error('Using development fallback - external API call skipped');
     }
     
     // Add API key to headers
@@ -42,7 +53,10 @@ orsApi.interceptors.request.use(
 orsApi.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error('ORS API Error:', error.response?.data || error.message);
+    // Only log errors in development mode to reduce console spam
+    if (process.env.NODE_ENV === 'development') {
+      logger.debug('ORS API Error', { error: error.response?.data || error.message });
+    }
     
     if (error.response?.status === 401) {
       throw new Error('Invalid OpenRouteService API key');
@@ -194,7 +208,7 @@ export class ORSGeocodingService {
         boundingbox: feature.bbox
       }));
     } catch (error) {
-      console.error('Geocoding search failed:', error);
+      logger.warn('ORS Geocoding search failed', { error: error.message, query });
       throw error;
     }
   }
@@ -226,7 +240,7 @@ export class ORSGeocodingService {
         boundingbox: feature.bbox
       };
     } catch (error) {
-      console.error('Reverse geocoding failed:', error);
+      logger.warn('ORS Reverse geocoding failed', { error: error.message, lat, lng });
       throw error;
     }
   }
@@ -291,7 +305,7 @@ export class ORSDirectionsService {
 
       return response.data;
     } catch (error) {
-      console.error('Directions request failed:', error);
+      logger.warn('ORS Directions request failed', { error: error.message, start, end, profile });
       throw error;
     }
   }
@@ -331,7 +345,7 @@ export class ORSDirectionsService {
         })) || []
       };
     } catch (error) {
-      console.error('Matrix request failed:', error);
+      logger.warn('ORS Matrix request failed', { error: error.message, locations, profile });
       throw error;
     }
   }
@@ -386,9 +400,49 @@ export class ORSPOIService {
 
       return response.data.features;
     } catch (error) {
-      console.error('POI search failed:', error);
-      throw error;
+      logger.warn('ORS POI search failed', { error: error.message, center, category });
+      
+      // Return mock/fallback data when API is unavailable
+      if (process.env.NODE_ENV === 'development') {
+        return this.getMockPOIData(center, category, limit);
+      }
+      
+      // In production, return empty array instead of throwing
+      return [];
     }
+  }
+
+  private static getMockPOIData(
+    center: ORSCoordinate,
+    category?: string,
+    limit: number = 50
+  ): ORSPOIResult[] {
+    // Generate some mock POI data for development
+    const mockPOIs: ORSPOIResult[] = [];
+    const categoryName = category || 'general';
+    
+    for (let i = 0; i < Math.min(limit, 5); i++) {
+      const offsetLat = (Math.random() - 0.5) * 0.01; // ~1km radius
+      const offsetLng = (Math.random() - 0.5) * 0.01;
+      
+      mockPOIs.push({
+        properties: {
+          osm_id: Math.floor(Math.random() * 1000000),
+          osm_type: 'node',
+          category_ids: [560],
+          osm_tags: {
+            name: `Sample ${categoryName.charAt(0).toUpperCase() + categoryName.slice(1)} ${i + 1}`,
+            amenity: categoryName
+          }
+        },
+        geometry: {
+          coordinates: [center.lng + offsetLng, center.lat + offsetLat],
+          type: 'Point'
+        }
+      });
+    }
+    
+    return mockPOIs;
   }
 }
 
@@ -412,7 +466,7 @@ export class ORSIsochroneService {
       const response = await orsApi.post(`/isochrones/${profile}`, requestBody);
       return response.data;
     } catch (error) {
-      console.error('Isochrone request failed:', error);
+      logger.warn('ORS Isochrone request failed', { error: error.message, center, range, rangeType, profile });
       throw error;
     }
   }

@@ -1,0 +1,239 @@
+import * as Sentry from '@sentry/node';
+import { CaptureConsole } from '@sentry/integrations';
+import { config } from './config';
+import logger from './logger';
+
+// Sentry configuration
+export const initializeSentry = (): void => {
+  const sentryDsn = process.env.SENTRY_DSN;
+  
+  if (!sentryDsn) {
+    logger.warn('Sentry DSN not provided, error monitoring disabled');
+    return;
+  }
+
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: config.node.env,
+    release: process.env.npm_package_version || '1.0.0',
+    
+    // Performance monitoring
+    tracesSampleRate: config.node.env === 'production' ? 0.1 : 1.0,
+    
+    // Additional integrations
+    integrations: [
+      // Automatically capture console errors
+      new CaptureConsole({
+        levels: ['error', 'warn'],
+      }),
+      
+      // HTTP integration for tracking HTTP requests
+      new Sentry.Integrations.Http({ tracing: true }),
+      
+      // Express integration for tracking Express requests
+      new Sentry.Integrations.Express({ app: undefined }),
+    ],
+    
+    // Filter out health check requests from being tracked
+    beforeSend(event, hint) {
+      // Don't send health check errors
+      if (event.request?.url?.includes('/health')) {
+        return null;
+      }
+      
+      // Don't send rate limit errors unless they're critical
+      if (event.exception?.values?.[0]?.value?.includes('Too many requests')) {
+        return null;
+      }
+      
+      return event;
+    },
+    
+    // Set user context
+    beforeSendTransaction(event) {
+      // Filter out health check transactions
+      if (event.request?.url?.includes('/health')) {
+        return null;
+      }
+      
+      return event;
+    },
+    
+    // Custom tags for better filtering
+    initialScope: {
+      tags: {
+        component: 'backend',
+        service: 'pathfinder-api',
+      },
+    },
+  });
+
+  logger.info('Sentry initialized successfully', {
+    environment: config.node.env,
+    dsn: sentryDsn.substring(0, 20) + '...',
+  });
+};
+
+// Express middleware for Sentry
+export const sentryRequestHandler = Sentry.Handlers.requestHandler({
+  // Include user information in error context
+  user: ['id', 'email', 'username'],
+  
+  // Include request information
+  request: ['method', 'url', 'headers', 'query', 'data'],
+  
+  // Include server information
+  serverName: true,
+  
+  // Include transaction information for performance monitoring
+  transaction: 'path',
+});
+
+export const sentryTracingHandler = Sentry.Handlers.tracingHandler();
+
+export const sentryErrorHandler = Sentry.Handlers.errorHandler({
+  shouldHandleError(error) {
+    // Handle all 4xx and 5xx errors
+    if (error.status && error.status >= 400) {
+      return true;
+    }
+    
+    // Handle all other errors
+    return true;
+  },
+});
+
+// Utility functions for manual error reporting
+export const captureSentryException = (
+  error: Error,
+  context?: {
+    user?: { id: string; email?: string };
+    tags?: Record<string, string>;
+    extra?: Record<string, any>;
+    level?: 'fatal' | 'error' | 'warning' | 'info' | 'debug';
+  }
+): string => {
+  return Sentry.withScope((scope) => {
+    if (context?.user) {
+      scope.setUser(context.user);
+    }
+    
+    if (context?.tags) {
+      Object.keys(context.tags).forEach(key => {
+        scope.setTag(key, context.tags![key]);
+      });
+    }
+    
+    if (context?.extra) {
+      Object.keys(context.extra).forEach(key => {
+        scope.setExtra(key, context.extra![key]);
+      });
+    }
+    
+    if (context?.level) {
+      scope.setLevel(context.level);
+    }
+    
+    return Sentry.captureException(error);
+  });
+};
+
+export const captureSentryMessage = (
+  message: string,
+  level: 'fatal' | 'error' | 'warning' | 'info' | 'debug' = 'info',
+  context?: {
+    user?: { id: string; email?: string };
+    tags?: Record<string, string>;
+    extra?: Record<string, any>;
+  }
+): string => {
+  return Sentry.withScope((scope) => {
+    if (context?.user) {
+      scope.setUser(context.user);
+    }
+    
+    if (context?.tags) {
+      Object.keys(context.tags).forEach(key => {
+        scope.setTag(key, context.tags![key]);
+      });
+    }
+    
+    if (context?.extra) {
+      Object.keys(context.extra).forEach(key => {
+        scope.setExtra(key, context.extra![key]);
+      });
+    }
+    
+    scope.setLevel(level);
+    
+    return Sentry.captureMessage(message, level);
+  });
+};
+
+// Performance monitoring utilities
+export const startSentryTransaction = (
+  name: string,
+  operation: string,
+  description?: string
+) => {
+  const transaction = Sentry.startTransaction({
+    name,
+    op: operation,
+    description,
+  });
+  
+  Sentry.getCurrentHub().configureScope(scope => scope.setSpan(transaction));
+  
+  return transaction;
+};
+
+export const finishSentryTransaction = (transaction: any, status?: string) => {
+  if (status) {
+    transaction.setStatus(status);
+  }
+  transaction.finish();
+};
+
+// Health check function for Sentry
+export const checkSentryHealth = (): { status: 'healthy' | 'unhealthy'; details: any } => {
+  try {
+    const hub = Sentry.getCurrentHub();
+    const client = hub.getClient();
+    
+    if (!client) {
+      return {
+        status: 'unhealthy',
+        details: { error: 'Sentry client not initialized' },
+      };
+    }
+    
+    return {
+      status: 'healthy',
+      details: {
+        dsn: client.getOptions().dsn,
+        environment: client.getOptions().environment,
+        release: client.getOptions().release,
+      },
+    };
+  } catch (error) {
+    return {
+      status: 'unhealthy',
+      details: { error: error instanceof Error ? error.message : 'Unknown error' },
+    };
+  }
+};
+
+// Graceful shutdown for Sentry
+export const closeSentry = async (timeout: number = 2000): Promise<boolean> => {
+  try {
+    logger.info('Shutting down Sentry...');
+    const result = await Sentry.close(timeout);
+    logger.info('Sentry shut down successfully');
+    return result;
+  } catch (error) {
+    logger.error('Error shutting down Sentry', { error });
+    return false;
+  }
+};
+
+export { Sentry };

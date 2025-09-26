@@ -7,7 +7,7 @@ declare class MapsService {
     calculateRoute(params: RouteCalculationParams): Promise<Route>;
     geocode(params: GeocodeParams): Promise<GeocodingResult[]>;
     reverseGeocode(location: Location): Promise<GeocodingResult[]>;
-    getTravelTimeMatrix(origins: Location[], destinations: Location[], travelMode?: string): Promise<any>;
+    getTravelTimeMatrix(origins: Location[], destinations: Location[], travelMode?: string): Promise<import("@googlemaps/google-maps-services-js").DistanceMatrixResponseData>;
     private formatPlace;
     private formatRoute;
     private formatGeocodingResult;

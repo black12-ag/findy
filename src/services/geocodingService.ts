@@ -13,6 +13,7 @@ import {
   FALLBACK_APIS 
 } from '../config/apiConfig';
 import { quotaManager } from './quotaManager';
+import { logger } from '../utils/logger';
 
 export interface GeocodingOptions {
   text: string;
@@ -166,7 +167,7 @@ class GeocodingService {
         
         return results;
       } catch (error) {
-        console.warn('OpenRouteService geocoding failed, trying fallback:', error);
+        this.logError('geocoding_failed', 'OpenRouteService geocoding failed, trying fallback', { error: error.message, query });
         quotaManager.recordUsage('GEOCODING', false);
       }
     }
@@ -224,7 +225,7 @@ class GeocodingService {
         
         return results;
       } catch (error) {
-        console.warn('OpenRouteService autocomplete failed:', error);
+        this.logError('autocomplete_failed', 'OpenRouteService autocomplete failed', { error: error.message, query });
         quotaManager.recordUsage('GEOCODING', false);
       }
     }
@@ -269,7 +270,7 @@ class GeocodingService {
         
         return results;
       } catch (error) {
-        console.warn('OpenRouteService reverse geocoding failed, trying fallback:', error);
+        this.logError('reverse_geocoding_failed', 'OpenRouteService reverse geocoding failed, trying fallback', { error: error.message, lat, lng });
         quotaManager.recordUsage('GEOCODING', false);
       }
     }
@@ -528,6 +529,24 @@ class GeocodingService {
     if (this.cache.size > 100) {
       const oldestKey = this.cache.keys().next().value;
       this.cache.delete(oldestKey);
+    }
+  }
+
+  /**
+   * Log errors to monitoring service instead of console
+   */
+  private logError(errorType: string, message: string, metadata?: any) {
+    const errorData = {
+      service: 'GeocodingService',
+      type: errorType,
+      message,
+      timestamp: new Date().toISOString(),
+      metadata
+    };
+    
+    // For development, structured logging
+    if (import.meta.env.DEV) {
+      logger.error('[GeocodingService] ' + message, errorData);
     }
   }
 

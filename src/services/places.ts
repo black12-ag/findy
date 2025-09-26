@@ -12,9 +12,10 @@ class PlacesService {
   
   constructor() {
     // Check if ORS API key is available
-    this.useRealAPI = !!process.env.VITE_ORS_API_KEY;
+    const apiKey = import.meta.env?.VITE_ORS_API_KEY || '';
+    this.useRealAPI = !!apiKey;
     if (this.useRealAPI) {
-      setORSApiKey(process.env.VITE_ORS_API_KEY!);
+      setORSApiKey(apiKey);
     }
   }
 

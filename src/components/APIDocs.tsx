@@ -116,9 +116,8 @@ async function getRoute() {
       optimize: 'time'
     });
     
-    console.log('Route distance:', route.distance);
-    console.log('Estimated time:', route.duration);
-    console.log('Steps:', route.steps);
+    // Route data available in route object
+    // route.distance, route.duration, route.steps
   } catch (error) {
     console.error('Error:', error.message);
   }

@@ -1,4 +1,5 @@
 import React from 'react';
+import { logger } from '../utils/logger';
 
 export interface NotificationPayload {
   title: string;
@@ -39,11 +40,62 @@ class PushNotificationService {
   private async init() {
     if ('serviceWorker' in navigator) {
       try {
+        // First register the service worker if not already registered
+        await this.registerServiceWorker();
+        
+        // Wait for service worker to be ready
         this.registration = await navigator.serviceWorker.ready;
-        console.log('[Push] Service worker ready for push notifications');
+        logger.info('Service worker ready for push notifications');
+        
+        // Check if user is already subscribed
+        const subscribed = await this.isUserSubscribed();
+        if (subscribed) {
+          this.subscription = await this.registration.pushManager.getSubscription();
+        }
       } catch (error) {
         console.error('[Push] Service worker not available:', error);
       }
+    }
+  }
+
+  /**
+   * Register service worker for push notifications
+   */
+  private async registerServiceWorker(): Promise<void> {
+    try {
+      const existingRegistration = await navigator.serviceWorker.getRegistration();
+      
+      if (existingRegistration) {
+        this.registration = existingRegistration;
+        logger.debug('Using existing service worker registration');
+        return;
+      }
+
+      // Register new service worker
+      this.registration = await navigator.serviceWorker.register('/sw.js', {
+        scope: '/'
+      });
+
+      logger.info('Service worker registered successfully');
+
+      // Handle service worker updates
+      this.registration.addEventListener('updatefound', () => {
+        logger.info('New service worker version found');
+        const newWorker = this.registration!.installing;
+        
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              logger.info('New service worker installed, page refresh recommended');
+              // You could show a notification to refresh the page here
+            }
+          });
+        }
+      });
+
+    } catch (error) {
+      console.error('[Push] Service worker registration failed:', error);
+      throw error;
     }
   }
 
@@ -77,10 +129,10 @@ class PushNotificationService {
     const permission = await Notification.requestPermission();
     
     if (permission === 'granted') {
-      console.log('[Push] Notification permission granted');
+      logger.info('Notification permission granted');
       await this.subscribeUser();
     } else {
-      console.log('[Push] Notification permission denied');
+      logger.warn('Notification permission denied');
     }
     
     return permission;
@@ -118,7 +170,7 @@ class PushNotificationService {
       this.subscription = await this.registration.pushManager.subscribe(options);
 
       const subscriptionData = this.getSubscriptionData();
-      console.log('[Push] User subscribed to push notifications');
+      logger.info('User subscribed to push notifications');
       
       // Here you would typically send the subscription to your backend
       await this.sendSubscriptionToBackend(subscriptionData);
@@ -135,14 +187,14 @@ class PushNotificationService {
    */
   async unsubscribeUser(): Promise<boolean> {
     if (!this.subscription) {
-      console.log('[Push] No subscription to unsubscribe from');
+      logger.debug('No subscription to unsubscribe from');
       return true;
     }
 
     try {
       const result = await this.subscription.unsubscribe();
       this.subscription = null;
-      console.log('[Push] User unsubscribed from push notifications');
+      logger.info('User unsubscribed from push notifications');
       
       // Notify backend about unsubscription
       await this.removeSubscriptionFromBackend();

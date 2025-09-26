@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.redisClient = exports.prismaClient = exports.initializeDatabases = exports.checkDatabaseHealth = exports.getRedisClient = exports.getPrismaClient = void 0;
+exports.connectDatabase = exports.prisma = exports.initializeDatabases = exports.checkDatabaseHealth = exports.getRedisClient = exports.getPrismaClient = void 0;
 const client_1 = require("@prisma/client");
 const ioredis_1 = __importDefault(require("ioredis"));
 const config_1 = __importDefault(require("./config"));
@@ -11,7 +11,7 @@ const logger_1 = __importDefault(require("./logger"));
 let prismaClient;
 const getPrismaClient = () => {
     if (!prismaClient) {
-        exports.prismaClient = prismaClient = new client_1.PrismaClient({
+        prismaClient = new client_1.PrismaClient({
             log: config_1.default.server.isDevelopment
                 ? ['query', 'info', 'warn', 'error']
                 : ['error'],
@@ -35,15 +35,9 @@ exports.getPrismaClient = getPrismaClient;
 let redisClient;
 const getRedisClient = () => {
     if (!redisClient) {
-        exports.redisClient = redisClient = new ioredis_1.default(config_1.default.database.redis, {
-            retryDelayOnFailover: 100,
+        redisClient = new ioredis_1.default(config_1.default.database.redis, {
             maxRetriesPerRequest: 3,
             lazyConnect: true,
-            reconnectOnError: (err) => {
-                logger_1.default.error('Redis reconnection error:', err);
-                const targetError = 'READONLY';
-                return err.message.includes(targetError);
-            },
         });
         redisClient.on('connect', () => {
             logger_1.default.info('Redis client connected');
@@ -111,4 +105,6 @@ const initializeDatabases = async () => {
     }
 };
 exports.initializeDatabases = initializeDatabases;
+exports.prisma = (0, exports.getPrismaClient)();
+exports.connectDatabase = exports.initializeDatabases;
 //# sourceMappingURL=database.js.map
