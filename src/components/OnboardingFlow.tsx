@@ -282,13 +282,13 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     const isAllowed = permissions[type];
 
     return (
-      <div className=\"flex items-center gap-4\">
+      <div className="flex items-center gap-4">
         <div className={`w-12 h-12 bg-${color}-100 rounded-full flex items-center justify-center`}>
           <Icon className={`w-6 h-6 text-${color}-600`} />
         </div>
-        <div className=\"flex-1\">
-          <h3 className=\"font-medium text-gray-900 mb-1\">{title}</h3>
-          <p className=\"text-sm text-gray-600\">{description}</p>
+        <div className="flex-1">
+          <h3 className="font-medium text-gray-900 mb-1">{title}</h3>
+          <p className="text-sm text-gray-600">{description}</p>
         </div>
         <Switch
           checked={isAllowed}
@@ -348,28 +348,49 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
 
   const renderPersonalizationScreen = () => (
-    <div className=\"flex flex-col h-full px-6\">\n      <div className=\"pt-8 pb-6\">\n        <h2 className=\"text-2xl font-bold text-gray-900 mb-2\">Personalize Your Experience</h2>\n        <p className=\"text-gray-600\">Set up your preferences for better recommendations</p>\n      </div>\n\n      <div className=\"flex-1 space-y-6 scroll-y hide-scrollbar scroll-smooth\">\n        {/* Address Setup */}\n        <div>\n          <h3 className=\"font-medium text-gray-900 mb-3\">Quick Access Locations</h3>\n          <div className=\"space-y-3\">\n            <div>\n              <label className=\"block text-sm text-gray-600 mb-1\">Home Address</label>\n              <div className=\"relative\">\n                <Home className=\"absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400\" />\n                <Input
+    <div className="flex flex-col h-full px-6">
+      <div className="pt-8 pb-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Personalize Your Experience</h2>
+        <p className="text-gray-600">Set up your preferences for better recommendations</p>
+      </div>
+
+      <div className="flex-1 space-y-6 scroll-y hide-scrollbar scroll-smooth">
+        {/* Address Setup */}
+        <div>
+          <h3 className="font-medium text-gray-900 mb-3">Quick Access Locations</h3>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Home Address</label>
+              <div className="relative">
+                <Home className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
                   value={homeAddress}
                   onChange={(e) => setHomeAddress(e.target.value)}
-                  placeholder=\"Enter your home address\"
-                  className=\"pl-10\"
+                  placeholder="Enter your home address"
+                  className="pl-10"
                 />
               </div>
             </div>
             <div>
-              <label className=\"block text-sm text-gray-600 mb-1\">Work Address</label>
-              <div className=\"relative\">\n                <Briefcase className=\"absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400\" />\n                <Input
+              <label className="block text-sm text-gray-600 mb-1">Work Address</label>
+              <div className="relative">
+                <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
                   value={workAddress}
                   onChange={(e) => setWorkAddress(e.target.value)}
-                  placeholder=\"Enter your work address\"
-                  className=\"pl-10\"
+                  placeholder="Enter your work address"
+                  className="pl-10"
                 />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Transport Modes */}\n        <div>\n          <h3 className=\"font-medium text-gray-900 mb-3\">Preferred Transport Modes</h3>\n          <div className=\"grid grid-cols-2 gap-3\">\n            {[
+        {/* Transport Modes */}
+        <div>
+          <h3 className="font-medium text-gray-900 mb-3">Preferred Transport Modes</h3>
+          <div className="grid grid-cols-2 gap-3">
+            {[
               { id: 'driving', icon: Car, label: 'Driving', color: '#3B82F6' },
               { id: 'walking', icon: UserRound, label: 'Walking', color: '#10B981' },
               { id: 'transit', icon: Bus, label: 'Transit', color: '#F59E0B' },
@@ -388,14 +409,14 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   } : undefined}
                   onClick={() => toggleTransportMode(mode.id as TransportMode)}
                 >
-                  <div className=\"flex items-center gap-3\">
+                  <div className="flex items-center gap-3">
                     <div 
-                      className=\"w-10 h-10 rounded-full flex items-center justify-center text-white\"
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white"
                       style={{ backgroundColor: mode.color }}
                     >
-                      <Icon className=\"w-5 h-5\" />
+                      <Icon className="w-5 h-5" />
                     </div>
-                    <span className=\"font-medium text-gray-900\">{mode.label}</span>
+                    <span className="font-medium text-gray-900">{mode.label}</span>
                   </div>
                 </Card>
               );
@@ -403,12 +424,16 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           </div>
         </div>
 
-        {/* Accessibility */}\n        <div>\n          <h3 className=\"font-medium text-gray-900 mb-3\">Accessibility Preferences</h3>\n          <div className=\"space-y-4\">\n            <div className=\"flex items-center justify-between\">
-              <div className=\"flex items-center gap-3\">
-                <Volume2 className=\"w-5 h-5 text-gray-600\" />
+        {/* Accessibility */}
+        <div>
+          <h3 className="font-medium text-gray-900 mb-3">Accessibility Preferences</h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Volume2 className="w-5 h-5 text-gray-600" />
                 <div>
-                  <span className=\"text-gray-900\">Voice Guidance</span>
-                  <p className=\"text-sm text-gray-500\">Turn-by-turn voice instructions</p>
+                  <span className="text-gray-900">Voice Guidance</span>
+                  <p className="text-sm text-gray-500">Turn-by-turn voice instructions</p>
                 </div>
               </div>
               <Switch
@@ -418,12 +443,12 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 }
               />
             </div>
-            <div className=\"flex items-center justify-between\">
-              <div className=\"flex items-center gap-3\">
-                <Shield className=\"w-5 h-5 text-gray-600\" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Shield className="w-5 h-5 text-gray-600" />
                 <div>
-                  <span className=\"text-gray-900\">High Contrast Mode</span>
-                  <p className=\"text-sm text-gray-500\">Better visibility</p>
+                  <span className="text-gray-900">High Contrast Mode</span>
+                  <p className="text-sm text-gray-500">Better visibility</p>
                 </div>
               </div>
               <Switch
@@ -436,25 +461,28 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           </div>
         </div>
 
-        {/* Language */}\n        <div>\n          <h3 className=\"font-medium text-gray-900 mb-3\">Language</h3>\n          <Card className=\"p-3\">
-            <div className=\"flex items-center gap-3\">
-              <Globe className=\"w-5 h-5 text-gray-600\" />
-              <span className=\"text-gray-900\">{language}</span>
-              <ChevronRight className=\"w-4 h-4 text-gray-400 ml-auto\" />
+        {/* Language */}
+        <div>
+          <h3 className="font-medium text-gray-900 mb-3">Language</h3>
+          <Card className="p-3">
+            <div className="flex items-center gap-3">
+              <Globe className="w-5 h-5 text-gray-600" />
+              <span className="text-gray-900">{language}</span>
+              <ChevronRight className="w-4 h-4 text-gray-400 ml-auto" />
             </div>
           </Card>
         </div>
       </div>
 
-      <div className=\"pb-6\">
+      <div className="pb-6">
         <Button 
-          className=\"w-full\" 
+          className="w-full" 
           style={{ backgroundColor: '#5B4FE5' }}
           onClick={nextStep}
           disabled={!canProceed()}
         >
           Continue
-          <ChevronRight className=\"w-4 h-4 ml-2\" />
+          <ChevronRight className="w-4 h-4 ml-2" />
         </Button>
       </div>
     </div>

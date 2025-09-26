@@ -27,10 +27,13 @@ import { APIDocs } from './components/APIDocs';
 import { MultiStopRoutePlanner } from './components/MultiStopRoutePlanner';
 import { OnboardingFlow } from './components/OnboardingFlow';
 import { Button } from './components/ui/button';
+import { ORSConfigPanel } from './components/ORSConfigPanel';
 import { Search, MapPin, User, Target, Mic, Bell, Car, Brain, Trophy } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
+import ErrorBoundary from './components/ErrorBoundary';
+import { LoadingProvider, LoadingOverlay, useLoading } from './contexts/LoadingContext';
 
-type Screen = 'map' | 'search' | 'route' | 'navigation' | 'saved' | 'settings' | 'transit' | 'offline' | 'ar' | 'social' | 'profile' | 'voice' | 'eta-share' | 'safety' | 'integrations' | 'ai-predictions' | 'analytics' | 'parking' | 'gamification' | 'fleet' | 'api-docs' | 'multi-stop';
+type Screen = 'map' | 'search' | 'route' | 'navigation' | 'saved' | 'settings' | 'transit' | 'offline' | 'ar' | 'social' | 'profile' | 'voice' | 'eta-share' | 'safety' | 'integrations' | 'ai-predictions' | 'analytics' | 'parking' | 'gamification' | 'fleet' | 'api-docs' | 'multi-stop' | 'ors-config';
 type TransportMode = 'driving' | 'walking' | 'transit' | 'cycling';
 
 interface Location {
@@ -52,7 +55,7 @@ interface Route {
   steps: string[];
 }
 
-export default function App() {
+function AppContent() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<Screen>('map');
@@ -325,6 +328,7 @@ export default function App() {
             onNavigateToIntegrations={() => setCurrentScreen('integrations')}
             onNavigateToFleet={() => setCurrentScreen('fleet')}
             onNavigateToAPIDocs={() => setCurrentScreen('api-docs')}
+            onNavigateToORSConfig={() => setCurrentScreen('ors-config')}
           />
         );
       case 'safety':
@@ -396,6 +400,12 @@ export default function App() {
             onBack={() => setCurrentScreen('route')}
           />
         );
+      case 'ors-config':
+        return (
+          <ORSConfigPanel
+            onBack={() => setCurrentScreen('settings')}
+          />
+        );
       default:
         return (
           <MapView
@@ -417,7 +427,10 @@ export default function App() {
 
   // Show login if user isn't authenticated
   if (!authLoading && !isAuthenticated) {
-    return <LoginScreen />;
+    return <LoginScreen onSuccess={() => {
+      // Handle successful login
+      console.log('Login successful');
+    }} />;
   }
 
   return (
@@ -541,5 +554,33 @@ export default function App() {
         />
       )}
     </div>
+  );
+}
+
+// Component to show global loading overlay when needed
+function GlobalLoadingOverlay() {
+  const { isAnyLoading } = useLoading();
+  
+  return (
+    <LoadingOverlay 
+      visible={isAnyLoading()} 
+      text="Processing..." 
+      backdrop={false}
+    />
+  );
+}
+
+// Main App wrapper with providers and error boundary
+export default function App() {
+  return (
+    <ErrorBoundary onError={(error, errorInfo) => {
+      console.error('App Error:', error);
+      // Could send to analytics service here
+    }}>
+      <LoadingProvider>
+        <AppContent />
+        <GlobalLoadingOverlay />
+      </LoadingProvider>
+    </ErrorBoundary>
   );
 }

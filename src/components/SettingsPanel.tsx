@@ -37,9 +37,10 @@ interface SettingsPanelProps {
   onNavigateToIntegrations?: () => void;
   onNavigateToFleet?: () => void;
   onNavigateToAPIDocs?: () => void;
+  onNavigateToORSConfig?: () => void;
 }
 
-export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegrations, onNavigateToFleet, onNavigateToAPIDocs }: SettingsPanelProps) {
+export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegrations, onNavigateToFleet, onNavigateToAPIDocs, onNavigateToORSConfig }: SettingsPanelProps) {
   const [darkMode, setDarkMode] = useState(false);
   const [voiceGuidance, setVoiceGuidance] = useState(true);
   const [notifications, setNotifications] = useState(true);
@@ -103,6 +104,7 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
       title: 'Integrations',
       items: [
         { id: 'connected', icon: Settings, label: 'Connected Services', description: 'Manage app integrations', onClick: onNavigateToIntegrations },
+        { id: 'ors-config', icon: Settings, label: 'OpenRouteService API', description: 'Configure live navigation APIs', onClick: onNavigateToORSConfig },
       ]
     },
     {
