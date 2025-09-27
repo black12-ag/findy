@@ -125,7 +125,7 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 // Storage key
-const STORAGE_KEY = 'comtion-app-settings';
+const STORAGE_KEY = 'findy-app-settings';
 
 // Provider component
 interface SettingsProviderProps {

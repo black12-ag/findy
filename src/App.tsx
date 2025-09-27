@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { MapView } from './components/MapView';
+import React, { useState, useEffect, useMemo } from 'react';
+import { GoogleMapView } from './components/GoogleMapView';
 import { SearchPanel } from './components/SearchPanel';
 import { NavigationPanel } from './components/NavigationPanel';
 import { BottomNavigation } from './components/BottomNavigation';
@@ -7,7 +7,6 @@ import { EnhancedRoutePanel } from './components/EnhancedRoutePanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SavedPlacesPanel } from './components/SavedPlacesPanel';
 import { PublicTransitPanel } from './components/PublicTransitPanel';
-import { OfflineMapsPanel } from './components/OfflineMapsPanel';
 import { ARNavigationPanel } from './components/ARNavigationPanel';
 import SocialPanel from './components/SocialPanelFixed';
 import { ProfilePanel } from './components/ProfilePanel';
@@ -18,7 +17,6 @@ import CrashReporting from './components/CrashReporting';
 import { SmartNotifications } from './components/SmartNotifications';
 import { ETASharingPanel } from './components/ETASharingPanel';
 import { TransportModeSelector } from './components/TransportModeSelector';
-import { LoginScreen } from './components/LoginScreen';
 import { SafetyCenter } from './components/safety/SafetyCenter';
 import { IntegrationsHub } from './components/integrations/IntegrationsHub';
 import { AIPredictions } from './components/AIPredictions';
@@ -31,7 +29,8 @@ import { MultiStopRoutePlanner } from './components/MultiStopRoutePlanner';
 import { OnboardingFlow } from './components/OnboardingFlow';
 import { Button } from './components/ui/button';
 import { ORSConfigPanel } from './components/ORSConfigPanel';
-import { Search, MapPin, User, Target, Mic, Bell, Car, Brain, Trophy } from 'lucide-react';
+import { Search, MapPin, User, Target, Mic, Bell, Car, Brain, Trophy, ArrowLeft, Menu, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAuth } from './hooks/useAuth';
 import ErrorBoundary from './components/ErrorBoundary';
 import { LoadingProvider, LoadingOverlay, useLoading } from './contexts/LoadingContext';
@@ -42,12 +41,15 @@ import { ImageWithFallback } from './components/figma/ImageWithFallback';
 import LoadingSpinner from './components/LoadingSpinner';
 import { NavigationMenu } from './components/NavigationMenu';
 import { Toaster } from './components/ui/sonner';
+import { ThemeToggle } from './components/ThemeToggle';
 import { logger } from './utils/logger';
+import googleMapsService from './services/googleMapsService';
 import { UserProvider } from './contexts/UserContext';
 import { NavigationProvider, useNavigation } from './contexts/NavigationContext';
 import { useUser } from './contexts/UserContext';
 import { SettingsProvider } from './contexts/SettingsContext';
-import { LocationProvider } from './contexts/LocationContext';
+import { LocationProvider, useLocation } from './contexts/LocationContext';
+import { ThemeProvider } from 'next-themes';
 
 import type { Location, Route, TransportMode } from './contexts/NavigationContext';
 
@@ -56,8 +58,12 @@ type Screen = 'map' | 'search' | 'route' | 'navigation' | 'saved' | 'settings' |
 function AppContent() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { user } = useUser();
+  const { 
+    currentLocation: locationData,
+    startLocationTracking,
+  } = useLocation();
   const {
-    currentLocation,
+    currentLocation: navLocation,
     selectedLocation,
     currentRoute,
     transportMode,
@@ -69,14 +75,20 @@ function AppContent() {
     startNavigation,
     stopNavigation,
     calculateRoute,
+    setCurrentLocation,
   } = useNavigation();
+  
+  // Store map instance for sharing with components
+  const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
   
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<Screen>('map');
-  const [showNotifications, setShowNotifications] = useState(true);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [centerSignal, setCenterSignal] = useState(0);
   const [selectedPlace, setSelectedPlace] = useState<any>(null);
   const [showPlaceDetails, setShowPlaceDetails] = useState(false);
+  const [useEnhancedMap, setUseEnhancedMap] = useState(true);
+  const [pendingSearchQuery, setPendingSearchQuery] = useState('');
   const pageRouter = usePageRouter();
 
   // Check if user has completed onboarding
@@ -92,6 +104,22 @@ function AppContent() {
 
   // Saved places - loaded from localStorage or API
   const [savedPlaces, setSavedPlaces] = useState<Location[]>([]);
+
+  // Sync location data from LocationContext to NavigationContext
+  useEffect(() => {
+    if (locationData && (!navLocation || 
+        locationData.lat !== navLocation.lat || 
+        locationData.lng !== navLocation.lng)) {
+      setCurrentLocation(locationData);
+      logger.debug('Synced location data to navigation context', { locationData });
+    }
+  }, [locationData, navLocation, setCurrentLocation]);
+
+  // Start location tracking on mount
+  useEffect(() => {
+    startLocationTracking();
+    logger.debug('Started location tracking');
+  }, [startLocationTracking]);
 
   // Load saved places on mount
   useEffect(() => {
@@ -115,10 +143,33 @@ function AppContent() {
     }
   }, [savedPlaces]);
 
-  const handleSearch = (query: string) => {
+  const handleSearch = async (query: string) => {
     setSearchQuery(query);
     logger.debug('Search initiated', { query });
-    // Search context will handle the actual search
+    
+    if (!query.trim()) return;
+    
+    try {
+      // Use Google Places search for suggestions
+      const results = await googleMapsService.searchPlaces({
+        query: query,
+        location: navLocation ? { lat: navLocation.lat, lng: navLocation.lng } : undefined,
+        radius: 50000 // 50km radius
+      });
+      
+      if (results.length > 0) {
+        // Navigate to search panel with results
+        setCurrentScreen('search');
+        toast.success(`Found ${results.length} results for "${query}"`);
+      } else {
+        toast.info('No results found for your search');
+      }
+    } catch (error) {
+      logger.error('Search failed:', error);
+      toast.error('Search failed. Please try again.');
+      // Fallback to search panel
+      setCurrentScreen('search');
+    }
   };
 
   const handleLocationSelect = (location: Location) => {
@@ -214,6 +265,8 @@ function AppContent() {
       }
     } else if (notification.actionData?.mode === 'transit') {
       setTransportMode('transit');
+    } else if (notification.actionData?.findParking) {
+      setCurrentScreen('parking');
     }
     // Add more notification action handling as needed
   };
@@ -234,7 +287,7 @@ function AppContent() {
       case 'route':
         return (
           <EnhancedRoutePanel
-            from={currentLocation}
+            from={navLocation}
             to={selectedLocation}
             transportMode={transportMode}
             onStartNavigation={handleStartEnhancedNavigation}
@@ -245,7 +298,7 @@ function AppContent() {
       case 'transit':
         return (
           <PublicTransitPanel
-            from={currentLocation}
+            from={navLocation}
             to={selectedLocation}
             onStartNavigation={handleStartTransitNavigation}
             onBack={() => setCurrentScreen('map')}
@@ -269,12 +322,6 @@ function AppContent() {
             onAddPlace={(place) => {
               setSavedPlaces((prev) => [...prev, place]);
             }}
-          />
-        );
-      case 'offline':
-        return (
-          <OfflineMapsPanel
-            onBack={() => setCurrentScreen('map')}
           />
         );
       case 'ar':
@@ -331,7 +378,6 @@ function AppContent() {
         return (
           <SettingsPanel
             onBack={() => setCurrentScreen('map')}
-            onNavigateToOffline={() => setCurrentScreen('offline')}
             onNavigateToIntegrations={() => setCurrentScreen('integrations')}
             onNavigateToFleet={() => setCurrentScreen('fleet')}
             onNavigateToAPIDocs={() => setCurrentScreen('api-docs')}
@@ -359,11 +405,21 @@ function AppContent() {
           <div className="h-full bg-white p-4">
             <AIPredictions
               destination={selectedLocation?.name}
-              currentLocation={currentLocation.name}
+              currentLocation={navLocation?.name || ''}
+              map={mapInstance}
               onSuggestionAccept={(suggestion) => {
                 logger.debug('AI suggestion accepted', { suggestion });
                 // Handle different types of AI suggestions
-                if (suggestion.type === 'route') {
+                if (suggestion.type === 'traffic' && suggestion.actionData?.trafficData) {
+                  // Handle traffic suggestions
+                  const alt = suggestion.actionData.trafficData.alternativeRoutes[0];
+                  if (alt) {
+                    toast.info(`Consider taking ${alt.via} to save ${alt.timeSaved} minutes`);
+                  }
+                } else if (suggestion.type === 'parking' && suggestion.actionData?.parkingSpots) {
+                  // Switch to parking finder with spots already loaded
+                  setCurrentScreen('parking');
+                } else if (suggestion.type === 'route') {
                   // Auto-select suggested route
                   setTransportMode(suggestion.mode || transportMode);
                   if (suggestion.destination) {
@@ -399,6 +455,19 @@ function AppContent() {
           <ParkingFinder
             onBack={() => setCurrentScreen('map')}
             destination={selectedLocation?.name}
+            map={mapInstance}
+            onNavigateToParking={(spot) => {
+              // Start navigation to parking spot
+              if (spot.location) {
+                handleLocationSelect({
+                  lat: spot.location.lat,
+                  lng: spot.location.lng,
+                  name: spot.name,
+                  address: spot.address
+                });
+                setCurrentScreen('route');
+              }
+            }}
           />
         );
       case 'gamification':
@@ -501,14 +570,31 @@ function AppContent() {
           </div>
         );
       default:
+        // Always use GoogleMapView only
         return (
-          <MapView
-            currentLocation={currentLocation}
+          <GoogleMapView
+            currentLocation={navLocation}
             selectedLocation={selectedLocation}
             route={currentRoute}
             transportMode={transportMode}
             isNavigating={isNavigating}
             centerSignal={centerSignal}
+            onLocationSelect={handleLocationSelect}
+            onMapReady={(map) => {
+              logger.info('Google Map instance ready');
+            }}
+            onRouteRequest={(from, to) => {
+              // Calculate and start route
+              logger.info('Route requested from map click', { from, to });
+              setSelectedLocation(to);
+              
+              // Navigate to route screen to show route options
+              if (transportMode === 'transit') {
+                setCurrentScreen('transit');
+              } else {
+                setCurrentScreen('route');
+              }
+            }}
           />
         );
     }
@@ -519,67 +605,161 @@ function AppContent() {
     return <OnboardingFlow onComplete={completeOnboarding} />;
   }
 
-  // Optional login - users can continue as guest
-  // Commenting out forced authentication to allow guest access
-  // if (!authLoading && !isAuthenticated) {
-  //   return <LoginScreen onSuccess={() => {
-  //     // Handle successful login
-  //     logger.info('Login successful');
-  //   }} />;
-  // }
+  // Free mode: no login required; users continue as guests
 
   return (
-    <div className="h-screen w-full bg-background flex flex-col relative overflow-hidden">
-      {/* Top Bar - Only show on map screen */}
-      {currentScreen === 'map' && (
-        <div className="absolute top-0 left-0 right-0 z-50 p-4">
-          <div className="flex items-center gap-3">
-            {/* Search Bar */}
-            <div 
-              className="flex-1 bg-white rounded-xl shadow-lg border border-gray-200 px-4 py-3 cursor-pointer"
-              onClick={() => setCurrentScreen('search')}
+    <div className="h-screen w-full bg-background flex flex-col overflow-hidden">
+      {/* Persistent Top Navigation Bar */}
+      <div className="flex-shrink-0 bg-white border-b border-gray-200 px-4 py-3 z-50">
+        <div className="flex items-center gap-3">
+          {/* Back button - show on all screens except map */}
+          {currentScreen !== 'map' && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                // Handle back navigation based on current screen
+                if (currentScreen === 'navigation') {
+                  handleStopNavigation();
+                } else if (currentScreen === 'ar' || currentScreen === 'eta-share') {
+                  setCurrentScreen('navigation');
+                } else if (currentScreen === 'multi-stop') {
+                  setCurrentScreen('route');
+                } else if (currentScreen === 'transit' || currentScreen === 'route') {
+                  setCurrentScreen('map');
+                } else {
+                  setCurrentScreen('map');
+                }
+              }}
+              className="hover:bg-gray-100"
             >
-              <div className="flex items-center gap-3">
-                <Search className="w-5 h-5 text-gray-500" />
-                <span className="text-gray-500">Where to?</span>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+          )}
+          
+          {/* Search Bar - show on map screen */}
+          {currentScreen === 'map' && (
+            <div className="flex-1 flex items-center gap-2">
+              <div className="flex-1 bg-gray-50 rounded-xl border border-gray-200 px-4 py-2.5">
+                <div className="flex items-center gap-3">
+                  <Search className="w-5 h-5 text-gray-500" />
+                  <input
+                    type="text"
+                    placeholder="Where to?"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && searchQuery.trim()) {
+                        handleSearch(searchQuery);
+                        setPendingSearchQuery(searchQuery);
+                      }
+                    }}
+                    className="flex-1 bg-transparent border-none outline-none text-gray-700 placeholder-gray-500"
+                  />
+                  {searchQuery && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setPendingSearchQuery('');
+                      }}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (searchQuery.trim()) {
+                    handleSearch(searchQuery);
+                    setPendingSearchQuery(searchQuery);
+                  } else {
+                    setCurrentScreen('search');
+                  }
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Search className="w-4 h-4" />
+              </Button>
             </div>
+          )}
+          
+          {/* Screen Title - show on non-map screens */}
+          {currentScreen !== 'map' && (
+            <div className="flex-1">
+              <h1 className="font-semibold text-lg text-gray-900">
+                {currentScreen === 'search' && 'Search'}
+                {currentScreen === 'route' && 'Route'}
+                {currentScreen === 'navigation' && 'Navigation'}
+                {currentScreen === 'saved' && 'Saved Places'}
+                {currentScreen === 'settings' && 'Settings'}
+                {currentScreen === 'transit' && 'Public Transit'}
+                {currentScreen === 'offline' && 'Offline Maps'}
+                {currentScreen === 'ar' && 'AR Navigation'}
+                {currentScreen === 'social' && 'Community'}
+                {currentScreen === 'profile' && 'Profile'}
+                {currentScreen === 'voice' && 'Voice Commands'}
+                {currentScreen === 'eta-share' && 'Share ETA'}
+                {currentScreen === 'safety' && 'Safety Center'}
+                {currentScreen === 'integrations' && 'Integrations'}
+                {currentScreen === 'ai-predictions' && 'AI Assistant'}
+                {currentScreen === 'analytics' && 'Analytics'}
+                {currentScreen === 'parking' && 'Find Parking'}
+                {currentScreen === 'gamification' && 'Achievements'}
+                {currentScreen === 'fleet' && 'Fleet Management'}
+                {currentScreen === 'api-docs' && 'API Documentation'}
+                {currentScreen === 'multi-stop' && 'Multi-Stop Route'}
+                {currentScreen === 'ors-config' && 'API Configuration'}
+                {currentScreen === 'developer' && 'Developer Tools'}
+                {currentScreen === 'place-details' && 'Place Details'}
+                {currentScreen === 'push-settings' && 'Notifications'}
+                {currentScreen === 'device-test' && 'Device Test'}
+                {currentScreen === 'crash-reports' && 'Crash Reports'}
+              </h1>
+            </div>
+          )}
+          
+          {/* Action Buttons - always visible */}
+          <div className="flex gap-2">
+            <Button
+              size="icon"
+              className="bg-white text-gray-700 shadow-sm border border-gray-200 hover:bg-gray-50"
+              onClick={() => setCurrentScreen('voice')}
+            >
+              <Mic className="w-5 h-5" />
+            </Button>
             
-            {/* Action Buttons */}
-            <div className="flex gap-2">
-              <Button
-                size="icon"
-                className="bg-white text-gray-700 shadow-lg border border-gray-200 hover:bg-gray-50"
-                onClick={() => setCurrentScreen('voice')}
-              >
-                <Mic className="w-5 h-5" />
-              </Button>
-              
-              <Button
-                size="icon"
-                className="bg-white text-gray-700 shadow-lg border border-gray-200 hover:bg-gray-50 relative"
-                onClick={() => setShowNotifications(!showNotifications)}
-              >
-                <Bell className="w-5 h-5" />
+            <Button
+              size="icon"
+              className="bg-white text-gray-700 shadow-sm border border-gray-200 hover:bg-gray-50 relative"
+              onClick={() => setShowNotifications(!showNotifications)}
+            >
+              <Bell className="w-5 h-5" />
+              {showNotifications && (
                 <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full" />
-              </Button>
-              
-              <Button
-                size="icon"
-                className="bg-white text-gray-700 shadow-lg border border-gray-200 hover:bg-gray-50"
-                onClick={() => setCurrentScreen('profile')}
-              >
-                <User className="w-5 h-5" />
-              </Button>
-              
+              )}
+            </Button>
+            
+            <Button
+              size="icon"
+              className="bg-white text-gray-700 shadow-sm border border-gray-200 hover:bg-gray-50"
+              onClick={() => setCurrentScreen('profile')}
+            >
+              <User className="w-5 h-5" />
+            </Button>
+            
+              <ThemeToggle />
               <NavigationMenu
-                onNavigateToPage={(route, params) => pageRouter.navigateTo(route, params)}
-                onNavigateToScreen={(screen) => setCurrentScreen(screen as Screen)}
-              />
-            </div>
+              onNavigateToPage={(route, params) => pageRouter.navigateTo(route, params)}
+              onNavigateToScreen={(screen) => setCurrentScreen(screen as Screen)}
+            />
           </div>
         </div>
-      )}
+      </div>
 
       {/* Transport Mode Selector - Only show on map screen */}
       {currentScreen === 'map' && (
@@ -593,9 +773,9 @@ function AppContent() {
 
       {/* Smart Notifications - Only show on map screen */}
       {currentScreen === 'map' && showNotifications && (
-        <div className="absolute top-32 left-4 right-4 z-40 max-w-md">
+        <div className="absolute top-28 left-4 right-4 z-40 max-w-md">
           <SmartNotifications
-            currentLocation={currentLocation}
+            currentLocation={navLocation}
             onActionClick={handleNotificationAction}
           />
         </div>
@@ -603,10 +783,10 @@ function AppContent() {
 
       {/* Quick Action Buttons - Only show on map screen */}
       {currentScreen === 'map' && (
-        <div className="absolute right-4 bottom-32 z-40 flex flex-col gap-3">
+        <div className="absolute left-4 bottom-32 z-40 flex flex-col gap-3">
           <Button
             size="icon"
-            className="bg-white text-gray-700 shadow-lg border border-gray-200 hover:bg-gray-50"
+            className="h-12 w-12 rounded-2xl bg-white text-gray-700 shadow-lg border border-gray-200 hover:bg-gray-50"
             onClick={() => {
               // Center on current location: trigger a pulse/visual center
               setCenterSignal((n) => n + 1);
@@ -617,7 +797,7 @@ function AppContent() {
           
           <Button
             size="icon"
-            className="bg-white text-gray-700 shadow-lg border border-gray-200 hover:bg-gray-50"
+            className="h-12 w-12 rounded-2xl bg-white text-gray-700 shadow-lg border border-gray-200 hover:bg-gray-50"
             onClick={() => setCurrentScreen('saved')}
           >
             <MapPin className="w-5 h-5" />
@@ -625,7 +805,7 @@ function AppContent() {
           
           <Button
             size="icon"
-            className="bg-orange-600 text-white shadow-lg hover:bg-orange-700"
+            className="h-12 w-12 rounded-2xl bg-white text-orange-600 hover:bg-orange-50 shadow-lg border border-orange-300 dark:bg-orange-600 dark:text-white dark:hover:bg-orange-700 dark:border-white/10"
             onClick={() => setCurrentScreen('parking')}
           >
             <Car className="w-5 h-5" />
@@ -633,53 +813,26 @@ function AppContent() {
           
           <Button
             size="icon"
-            className="bg-purple-600 text-white shadow-lg hover:bg-purple-700"
+            className="h-12 w-12 rounded-2xl bg-white text-purple-600 hover:bg-purple-50 shadow-lg border border-purple-300 dark:bg-purple-600 dark:text-white dark:hover:bg-purple-700 dark:border-white/10"
             onClick={() => setCurrentScreen('ai-predictions')}
           >
             <Brain className="w-5 h-5" />
           </Button>
-          
-          {/* Demo place details button */}
-          <Button
-            size="icon"
-            className="bg-green-600 text-white shadow-lg hover:bg-green-700"
-            onClick={() => {
-              setSelectedPlace({
-                id: 'demo-place',
-                name: 'Demo Coffee Shop',
-                address: '123 Main St, San Francisco, CA',
-                category: 'restaurant',
-                rating: 4.5,
-                reviewCount: 127,
-                priceLevel: 2,
-                isOpen: true,
-                openHours: 'Open until 9 PM',
-                phone: '(555) 123-4567',
-                website: 'demo-coffee.com',
-                photos: [],
-                amenities: ['WiFi', 'Parking'],
-                reviews: []
-              });
-              setShowPlaceDetails(true);
-            }}
-          >
-            <MapPin className="w-5 h-5" />
-          </Button>
         </div>
       )}
 
-      {/* Main Content */}
-      <div className="flex-1 relative min-h-0">
+      {/* Main Content - with proper scrolling; add bottom padding so it doesn't hide behind fixed bottom nav */}
+      <div className="flex-1 relative overflow-y-auto pb-20">
         {renderCurrentScreen()}
       </div>
 
-      {/* Bottom Navigation - Only show on map screen when not navigating */}
-      {currentScreen === 'map' && !isNavigating && (
+      {/* Bottom Navigation - Always visible and fixed */}
+      <div className="fixed bottom-0 left-0 right-0 z-[1000]">
         <BottomNavigation
           currentScreen={currentScreen}
           onScreenChange={setCurrentScreen}
         />
-      )}
+      </div>
 
       {/* Place Details Sheet */}
       <PlaceDetailsSheet
@@ -687,11 +840,11 @@ function AppContent() {
         isOpen={showPlaceDetails}
         onClose={() => setShowPlaceDetails(false)}
         onNavigate={() => {
-          if (selectedPlace && currentLocation) {
+          if (selectedPlace && navLocation) {
             // Start navigation to selected place
             const route: Route = {
               id: 'place-route',
-              from: currentLocation,
+              from: navLocation,
               to: selectedPlace,
               distance: '2.5 km',
               duration: '8 min',
@@ -743,28 +896,30 @@ function GlobalLoadingOverlay() {
 // Main App wrapper with providers and error boundary
 export default function App() {
   return (
-    <ErrorBoundary onError={(error, errorInfo) => {
-      logger.error('App Error occurred', { error: error.message, stack: error.stack, errorInfo });
-      // Send to analytics service for crash reporting
-      import('./services/analyticsService').then(({ analyticsService }) => {
-        analyticsService.reportCrash(error, 'high', {
-          componentStack: errorInfo.componentStack,
-          type: 'react_error_boundary'
-        });
-      }).catch(console.error);
-    }}>
-      <LoadingProvider>
-        <SettingsProvider>
-          <LocationProvider>
-            <UserProvider>
-              <NavigationProvider>
-                <AppContent />
-                <GlobalLoadingOverlay />
-              </NavigationProvider>
-            </UserProvider>
-          </LocationProvider>
-        </SettingsProvider>
-      </LoadingProvider>
-    </ErrorBoundary>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <ErrorBoundary onError={(error, errorInfo) => {
+        logger.error('App Error occurred', { error: error.message, stack: error.stack, errorInfo });
+        // Send to analytics service for crash reporting
+        import('./services/analyticsService').then(({ analyticsService }) => {
+          analyticsService.reportCrash(error, 'high', {
+            componentStack: errorInfo.componentStack,
+            type: 'react_error_boundary'
+          });
+        }).catch(console.error);
+      }}>
+        <LoadingProvider>
+          <SettingsProvider>
+            <LocationProvider>
+              <UserProvider>
+                <NavigationProvider>
+                  <AppContent />
+                  <GlobalLoadingOverlay />
+                </NavigationProvider>
+              </UserProvider>
+            </LocationProvider>
+          </SettingsProvider>
+        </LoadingProvider>
+      </ErrorBoundary>
+    </ThemeProvider>
   );
 }

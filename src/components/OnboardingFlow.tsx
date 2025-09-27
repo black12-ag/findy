@@ -35,8 +35,7 @@ interface OnboardingFlowProps {
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { user, updateProfile } = useAuth();
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('welcome');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Removed loading/error to keep flow non-blocking and simplify logic
   
   const [permissions, setPermissions] = useState({
     location: false,
@@ -52,54 +51,63 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     highContrast: false,
     largeText: false
   });
-  const [language, setLanguage] = useState('English');
+  const [language] = useState('English');
 
-  // Request actual browser permissions
+  // Request actual browser permissions (non-blocking + short timeouts)
   const requestPermissions = async () => {
-    setIsLoading(true);
-    setError(null);
-
     try {
-      // Request location permission
+      // Request location permission (short timeout to avoid long waits)
       if (permissions.location && navigator.geolocation) {
-        await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            timeout: 10000,
-          });
+        await new Promise((resolve) => {
+          let done = false;
+          const timer = setTimeout(() => {
+            if (!done) resolve(undefined);
+          }, 2500);
+          navigator.geolocation.getCurrentPosition(
+            () => {
+              if (!done) {
+                done = true;
+                clearTimeout(timer);
+                resolve(undefined);
+              }
+            },
+            () => {
+              if (!done) {
+                done = true;
+                clearTimeout(timer);
+                resolve(undefined);
+              }
+            },
+            { timeout: 2500 },
+          );
         });
       }
 
-      // Request notification permission
+      // Request notification permission (do not block on denial)
       if (permissions.notifications && 'Notification' in window) {
-        const permission = await Notification.requestPermission();
-        if (permission === 'denied') {
-          throw new Error('Notification permission denied');
-        }
+        try {
+          await Notification.requestPermission();
+        } catch {}
       }
 
-      // Request microphone permission for voice commands
+      // Request microphone permission for voice commands (best effort)
       if (permissions.microphone && navigator.mediaDevices) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        // Stop the stream immediately after getting permission
-        stream.getTracks().forEach(track => track.stop());
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(track => track.stop());
+        } catch {}
       }
-
-    } catch (err: any) {
-      setError(err.message || 'Failed to get permissions');
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      // Best-effort; don't surface errors here to avoid blocking the flow
+      console.warn('Permission request encountered an issue (non-blocking):', err);
     }
   };
 
-  // Save user preferences to backend
+  // Save user preferences to backend (fire-and-forget style)
   const savePreferences = async () => {
     if (!user) return;
 
-    setIsLoading(true);
-    setError(null);
-
     try {
-      // Update user preferences
       await authService.updatePreferences({
         defaultTravelMode: preferredModes[0] || 'DRIVING',
         language: language === 'English' ? 'en' : 'en',
@@ -124,7 +132,6 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         },
       });
 
-      // Update profile with addresses if provided
       if (homeAddress || workAddress) {
         await updateProfile({
           bio: JSON.stringify({
@@ -135,11 +142,8 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           }),
         });
       }
-
     } catch (err: any) {
-      setError(err.message || 'Failed to save preferences');
-    } finally {
-      setIsLoading(false);
+      console.warn('Saving preferences failed (non-blocking):', err?.message || err);
     }
   };
 
@@ -170,30 +174,32 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   };
 
   const nextStep = async () => {
-    setError(null);
 
     switch (currentStep) {
-      case 'welcome':
+      case 'welcome': {
         setCurrentStep('permissions');
         break;
-        
-      case 'permissions':
-        // Request browser permissions before proceeding
-        if (permissions.location || permissions.notifications || permissions.microphone) {
-          await requestPermissions();
-          if (error) return; // Don't proceed if permission request failed
+      }
+
+      case 'permissions': {
+        // Move immediately for snappy UX; request permissions in background
+        const needsPermissions = permissions.location || permissions.notifications || permissions.microphone;
+        if (needsPermissions) {
+          // Fire and forget (non-blocking)
+          void requestPermissions();
         }
         setCurrentStep('personalization');
         break;
-        
-      case 'personalization':
-        // Save preferences before proceeding
-        await savePreferences();
-        if (error) return; // Don't proceed if save failed
+      }
+
+      case 'personalization': {
+        // Move immediately; save preferences in background
+        void savePreferences();
         setCurrentStep('tutorial');
         break;
-        
-      case 'tutorial':
+      }
+
+      case 'tutorial': {
         // Mark onboarding as complete
         localStorage.setItem('pathfinder_onboarding_complete', 'true');
         localStorage.setItem('pathfinder_onboarding_data', JSON.stringify({
@@ -206,6 +212,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         }));
         onComplete();
         break;
+      }
     }
   };
 
@@ -216,7 +223,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case 'permissions':
         return permissions.location; // Location is required
       case 'personalization':
-        return preferredModes.length > 0 && !isLoading;
+        return preferredModes.length > 0;
       case 'tutorial':
         return true;
       default:
@@ -322,7 +329,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               <Switch 
                 id="all-permissions" 
                 checked={permissions.location && permissions.notifications && permissions.microphone}
-                onCheckedChange={(checked) => {
+                onCheckedChange={(checked: boolean) => {
                   setPermissions({ location: checked, notifications: checked, microphone: checked });
                 }}
               />
@@ -438,7 +445,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               </div>
               <Switch
                 checked={accessibilityPrefs.voiceGuidance}
-                onCheckedChange={(checked) => 
+                onCheckedChange={(checked: boolean) => 
                   setAccessibilityPrefs(prev => ({ ...prev, voiceGuidance: checked }))
                 }
               />
@@ -453,7 +460,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               </div>
               <Switch
                 checked={accessibilityPrefs.highContrast}
-                onCheckedChange={(checked) => 
+                onCheckedChange={(checked: boolean) => 
                   setAccessibilityPrefs(prev => ({ ...prev, highContrast: checked }))
                 }
               />

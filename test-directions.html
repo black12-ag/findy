@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Directions API Test</title>
+    <script>
+      // Your Google Maps API Key
+      const API_KEY = 'AIzaSyCr3z9_rT0EdprALkAz-oi--XlqqUY0vQk';
+      
+      function initMap() {
+        const map = new google.maps.Map(document.getElementById("map"), {
+          center: { lat: 37.7749, lng: -122.4194 },
+          zoom: 13,
+          mapId: "DEMO_MAP_ID"
+        });
+        
+        const directionsService = new google.maps.DirectionsService();
+        const directionsRenderer = new google.maps.DirectionsRenderer({
+          map: map,
+          polylineOptions: {
+            strokeColor: '#4285F4',
+            strokeWeight: 6,
+            strokeOpacity: 0.8
+          }
+        });
+        
+        // Test route from San Francisco to Oakland
+        const request = {
+          origin: { lat: 37.7749, lng: -122.4194 }, // San Francisco
+          destination: { lat: 37.8044, lng: -122.2712 }, // Oakland
+          travelMode: google.maps.TravelMode.DRIVING
+        };
+        
+        directionsService.route(request, (result, status) => {
+          if (status === 'OK') {
+            directionsRenderer.setDirections(result);
+            document.getElementById('status').innerHTML = '✅ Directions API is working! Route displayed on map.';
+            console.log('Route details:', result);
+          } else {
+            document.getElementById('status').innerHTML = '❌ Directions failed: ' + status;
+            console.error('Directions request failed:', status);
+          }
+        });
+        
+        // Add click handler for testing
+        map.addListener('click', (event) => {
+          const clickedLocation = {
+            lat: event.latLng.lat(),
+            lng: event.latLng.lng()
+          };
+          
+          // Calculate new route to clicked location
+          const newRequest = {
+            origin: { lat: 37.7749, lng: -122.4194 },
+            destination: clickedLocation,
+            travelMode: google.maps.TravelMode.DRIVING
+          };
+          
+          directionsService.route(newRequest, (result, status) => {
+            if (status === 'OK') {
+              directionsRenderer.setDirections(result);
+              const route = result.routes[0];
+              const leg = route.legs[0];
+              document.getElementById('status').innerHTML = `✅ Route calculated: ${leg.distance.text} in ${leg.duration.text}`;
+            } else {
+              document.getElementById('status').innerHTML = '❌ Route calculation failed: ' + status;
+            }
+          });
+        });
+      }
+    </script>
+    <style>
+      #map { height: 400px; width: 100%; }
+      #status { padding: 20px; font-size: 16px; font-family: Arial; }
+      body { margin: 0; padding: 0; }
+    </style>
+</head>
+<body>
+    <div id="status">Loading map...</div>
+    <div id="map"></div>
+    <div style="padding: 20px; font-family: Arial;">
+      <h3>Google Directions API Test</h3>
+      <p>Click anywhere on the map to calculate a route from San Francisco to that location.</p>
+      <p>API Key: AIzaSyCr3z9...vQk</p>
+    </div>
+    <script
+      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCr3z9_rT0EdprALkAz-oi--XlqqUY0vQk&callback=initMap&libraries=marker"
+      async defer>
+    </script>
+</body>
+</html>

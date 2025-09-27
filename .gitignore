@@ -21,3 +21,6 @@ backend/prisma/dev.db*
 
 # OS files
 .DS_Store
+
+# Local Netlify folder
+.netlify

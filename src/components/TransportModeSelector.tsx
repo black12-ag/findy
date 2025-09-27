@@ -1,5 +1,4 @@
 import React from 'react';
-import { Car, UserRound, Bus, Bike } from 'lucide-react';
 import { Button } from './ui/button';
 
 type TransportMode = 'driving' | 'walking' | 'transit' | 'cycling';
@@ -10,34 +9,32 @@ interface TransportModeSelectorProps {
 }
 
 export function TransportModeSelector({ currentMode, onModeChange }: TransportModeSelectorProps) {
-  const modes = [
-    { id: 'driving', icon: Car, color: '#3B82F6', label: 'Drive' },
-    { id: 'walking', icon: UserRound, color: '#10B981', label: 'Walk' },
-    { id: 'transit', icon: Bus, color: '#F59E0B', label: 'Transit' },
-    { id: 'cycling', icon: Bike, color: '#8B5CF6', label: 'Bike' },
-  ] as const;
+  // Emoji selector with names; Taxi maps to driving
+  const modes: Array<{ key: string; label: string; name: string; color: string; mapsTo: TransportMode }> = [
+    { key: 'driving', label: '🚗', name: 'Drive', color: '#3B82F6', mapsTo: 'driving' },
+    { key: 'walking', label: '🚶', name: 'Walk', color: '#10B981', mapsTo: 'walking' },
+    { key: 'transit', label: '🚌', name: 'Transit', color: '#F59E0B', mapsTo: 'transit' },
+    { key: 'cycling', label: '🚲', name: 'Bike', color: '#8B5CF6', mapsTo: 'cycling' },
+  ];
 
   return (
-    <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-      {modes.map((mode) => {
-        const Icon = mode.icon;
-        const isActive = currentMode === mode.id;
-        
+    <div className="inline-flex gap-2">
+      {modes.map((m) => {
+        const isActive = currentMode === m.mapsTo;
         return (
           <Button
-            key={mode.id}
-            variant={isActive ? "default" : "ghost"}
-            size="sm"
-            className={`w-full justify-start gap-2 rounded-none border-0 ${
-              isActive 
-                ? 'text-white' 
-                : 'text-gray-600 hover:bg-gray-50'
+            key={m.key}
+            variant={isActive ? 'default' : 'ghost'}
+            aria-label={m.name}
+            className={`h-12 rounded-xl border-0 justify-center flex-row gap-2 px-3 min-w-[80px] shadow-lg ${
+              isActive ? 'text-white' : 'text-gray-700 bg-white/95 backdrop-blur hover:bg-white'
             }`}
-            style={isActive ? { backgroundColor: mode.color } : {}}
-            onClick={() => onModeChange(mode.id as TransportMode)}
+            style={isActive ? { backgroundColor: m.color } : {}}
+            onClick={() => onModeChange(m.mapsTo)}
+            title={m.name}
           >
-            <Icon className="w-4 h-4" />
-            <span className="text-sm">{mode.label}</span>
+            <span className="text-lg leading-none">{m.label}</span>
+            <span className="text-sm leading-none">{m.name}</span>
           </Button>
         );
       })}

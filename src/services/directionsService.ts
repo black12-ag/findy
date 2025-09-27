@@ -1,20 +1,14 @@
 /**
- * 🧭 OpenRouteService Directions API Service
+ * 🧭 Google Maps Directions API Service
  * 
- * Handles all routing and navigation API calls with your quota limits
- * Directions V2: 2000/2000 requests (40/minute)
+ * Handles all routing and navigation API calls using Google Maps
+ * With fallback to OpenRouteService when needed
  */
 
-import { 
-  ORS_BASE_URL, 
-  API_ENDPOINTS, 
-  DEFAULT_HEADERS, 
-  REQUEST_TIMEOUT,
-  TransportProfile 
-} from '../config/apiConfig';
-import { quotaManager } from './quotaManager';
-import { ORSDirectionsService, ORSCoordinate, convertORSRouteToAppRoute, setORSApiKey, formatDuration, formatDistance } from './openRouteService';
+import googleMapsService from './googleMapsService';
+import { ORSDirectionsService, ORSCoordinate, setORSApiKey } from './googleUnifiedService';
 import { logger } from '../utils/logger';
+import { toast } from 'sonner';
 
 export interface RouteCoordinate {
   lng: number;
@@ -99,7 +93,115 @@ class DirectionsService {
   }
 
   /**
-   * Get route using OpenRouteService API (if available) or fallback to existing implementation
+   * Get route using Google Maps API with OpenRouteService fallback
+   */
+  async getRoute(
+    start: RouteCoordinate,
+    end: RouteCoordinate,
+    transportMode: 'driving' | 'walking' | 'cycling' | 'transit' = 'driving',
+    options?: {
+      avoidTolls?: boolean;
+      avoidHighways?: boolean;
+      avoidFerries?: boolean;
+      alternative?: boolean;
+      waypoints?: RouteCoordinate[];
+    }
+  ): Promise<any> {
+    // Try Google Maps first
+    const googleResult = await this.getRouteWithGoogleMaps(start, end, transportMode, options);
+    if (googleResult) {
+      return googleResult;
+    }
+    
+    // Fallback to OpenRouteService
+    return this.getRouteWithORS(start, end, transportMode, options);
+  }
+
+  /**
+   * Get route using Google Maps API
+   */
+  async getRouteWithGoogleMaps(
+    start: RouteCoordinate,
+    end: RouteCoordinate,
+    transportMode: 'driving' | 'walking' | 'cycling' | 'transit' = 'driving',
+    options?: {
+      avoidTolls?: boolean;
+      avoidHighways?: boolean;
+      avoidFerries?: boolean;
+      alternative?: boolean;
+      waypoints?: RouteCoordinate[];
+    }
+  ): Promise<any | null> {
+    try {
+      if (!googleMapsService.isAvailable()) {
+        await googleMapsService.initialize();
+      }
+
+      if (!googleMapsService.isAvailable()) {
+        logger.warn('Google Maps not available, using fallback');
+        return null;
+      }
+
+      const waypoints = options?.waypoints?.map(wp => ({
+        location: { lat: wp.lat, lng: wp.lng },
+        stopover: true
+      })) || [];
+
+      const directionsResult = await googleMapsService.getDirections({
+        origin: { lat: start.lat, lng: start.lng },
+        destination: { lat: end.lat, lng: end.lng },
+        travelMode: googleMapsService.convertToGoogleTravelMode(transportMode),
+        waypoints,
+        avoidHighways: options?.avoidHighways || false,
+        avoidTolls: options?.avoidTolls || false,
+        avoidFerries: options?.avoidFerries || false,
+        provideRouteAlternatives: options?.alternative || false,
+      });
+
+      if (!directionsResult || !directionsResult.routes || directionsResult.routes.length === 0) {
+        logger.warn('No routes found in Google Maps response');
+        return null;
+      }
+
+      const route = directionsResult.routes[0];
+      const leg = route.legs[0];
+
+      // Convert Google Maps response to app format
+      const appRoute = {
+        id: `google_route_${Date.now()}`,
+        distance: leg.distance?.text || '0 km',
+        duration: leg.duration?.text || '0 min',
+        mode: transportMode,
+        steps: route.legs.flatMap(leg => 
+          leg.steps?.map(step => step.instructions?.replace(/<[^>]*>/g, '') || '') || []
+        ),
+        geometry: route.overview_polyline?.points || '',
+        from: { lat: start.lat, lng: start.lng },
+        to: { lat: end.lat, lng: end.lng },
+        transportMode,
+        summary: {
+          distanceMeters: leg.distance?.value || 0,
+          durationSeconds: leg.duration?.value || 0,
+        },
+        googleDirectionsResult: directionsResult, // Store original for map display
+      };
+
+      logger.info('Google Maps route calculated successfully', {
+        distance: appRoute.distance,
+        duration: appRoute.duration,
+        mode: transportMode
+      });
+
+      return appRoute;
+    } catch (error) {
+      logger.error('Google Maps directions failed', { error: error.message, transportMode, start, end });
+      toast.error('Route calculation failed, trying alternative service...');
+      return null;
+    }
+  }
+
+  /**
+   * Get route using OpenRouteService API (fallback)
    */
   async getRouteWithORS(
     start: RouteCoordinate,
@@ -233,9 +335,57 @@ class DirectionsService {
   }
 
   /**
-   * Get route between two or more points
+   * Test routing functionality - simple route calculation
    */
-  async getRoute(options: RouteOptions): Promise<SimpleRoute> {
+  async testRouting(
+    start: RouteCoordinate,
+    end: RouteCoordinate,
+    transportMode: 'driving' | 'walking' | 'cycling' | 'transit' = 'driving'
+  ): Promise<any> {
+    logger.info('Testing routing functionality', { start, end, transportMode });
+    
+    try {
+      // Try Google Maps first
+      const result = await this.getRoute(start, end, transportMode);
+      if (result) {
+        logger.info('Routing test successful with Google Maps', {
+          distance: result.distance,
+          duration: result.duration
+        });
+        return result;
+      }
+    } catch (error) {
+      logger.warn('Google Maps routing failed, trying fallback', error);
+    }
+    
+    try {
+      // Try ORS fallback
+      const result = await this.getRouteWithORS(start, end, transportMode);
+      if (result) {
+        logger.info('Routing test successful with ORS fallback', {
+          distance: result.distance,
+          duration: result.duration
+        });
+        return result;
+      }
+    } catch (error) {
+      logger.warn('ORS routing failed, using mock data', error);
+    }
+    
+    // Generate mock route as last resort
+    const mockRoute = this.getMockRoute(start, end, transportMode);
+    logger.info('Using mock route for testing', {
+      distance: mockRoute.distance,
+      duration: mockRoute.duration
+    });
+    
+    return mockRoute;
+  }
+
+  /**
+   * Get route between two or more points with advanced options
+   */
+  async getRouteWithOptions(options: RouteOptions): Promise<SimpleRoute> {
     const cacheKey = this.getCacheKey(options);
     
     // Check cache first
@@ -336,7 +486,7 @@ class DirectionsService {
       format: 'json'
     };
 
-    return this.getRoute(options);
+    return this.getRouteWithOptions(options);
   }
 
   /**

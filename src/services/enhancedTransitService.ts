@@ -10,7 +10,7 @@
  */
 
 import { logger } from '../utils/logger';
-import { ORSDirectionsService } from './openRouteService';
+import { ORSDirectionsService, setORSApiKey } from './googleUnifiedService';
 import { geolocationService } from './geolocationService';
 
 export interface GTFSAgency {

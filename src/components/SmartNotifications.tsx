@@ -232,59 +232,60 @@ export function SmartNotifications({ currentLocation, onActionClick }: SmartNoti
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-1">
       <AnimatePresence>
         {displayNotifications.map((notification) => {
           const Icon = notification.icon;
           return (
             <motion.div
               key={notification.id}
-              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              initial={{ opacity: 0, y: -14, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.95 }}
-              transition={{ duration: 0.3 }}
+              exit={{ opacity: 0, y: -14, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
             >
-              <Card className="p-4 shadow-lg border-l-4" style={{ borderLeftColor: notification.color }}>
-                <div className="flex items-start gap-3">
+              <Card className="p-2 shadow-lg border-l-4" style={{ borderLeftColor: notification.color }}>
+                <div className="flex items-start gap-1.5">
                   <div 
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0"
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-white flex-shrink-0"
                     style={{ backgroundColor: notification.color }}
                   >
-                    <Icon className="w-5 h-5" />
+                    <Icon className="w-3.5 h-3.5" />
                   </div>
                   
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <h4 className="font-medium text-gray-900">{notification.title}</h4>
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-start justify-between gap-1 mb-0.5">
+                      <h4 className="font-semibold text-sm leading-tight truncate">{notification.title}</h4>
+                      <div className="flex items-center gap-1">
                         <Badge 
                           variant="outline" 
-                          className={`text-xs ${getPriorityBadgeColor(notification.priority)}`}
+                          className={`text-[10px] px-1 py-0 ${getPriorityBadgeColor(notification.priority)}`}
                         >
                           {notification.priority}
                         </Badge>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="w-6 h-6 text-gray-400 hover:text-gray-600"
+                          className="w-4 h-4 text-gray-400 hover:text-gray-600"
                           onClick={() => dismissNotification(notification.id)}
+                          aria-label="Dismiss"
                         >
-                          <X className="w-4 h-4" />
+                          <X className="w-3 h-3" />
                         </Button>
                       </div>
                     </div>
                     
-                    <p className="text-sm text-gray-600 mb-2">{notification.message}</p>
+                    <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{notification.message}</p>
                     
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 text-xs text-gray-500">
+                      <div className="flex items-center gap-1 text-[10px] text-gray-500">
                         <span>{notification.timestamp}</span>
                         {notification.location && (
                           <>
                             <span>•</span>
                             <div className="flex items-center gap-1">
                               <MapPin className="w-3 h-3" />
-                              <span>{notification.location}</span>
+                              <span className="truncate max-w-[120px]">{notification.location}</span>
                             </div>
                           </>
                         )}
@@ -293,6 +294,7 @@ export function SmartNotifications({ currentLocation, onActionClick }: SmartNoti
                       {notification.actionText && (
                         <Button
                           size="sm"
+                          className="h-6 px-2 py-0.5 text-[11px]"
                           style={{ backgroundColor: notification.color }}
                           onClick={() => handleActionClick(notification)}
                         >
@@ -315,7 +317,7 @@ export function SmartNotifications({ currentLocation, onActionClick }: SmartNoti
             variant="ghost"
             size="sm"
             onClick={() => setShowAll(!showAll)}
-            className="text-gray-600"
+            className="text-gray-600 text-[11px]"
           >
             {showAll ? (
               <>Show Less</>
@@ -328,12 +330,12 @@ export function SmartNotifications({ currentLocation, onActionClick }: SmartNoti
 
       {/* Smart Insights */}
       {activeNotifications.length > 0 && (
-        <Card className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
-          <div className="flex items-center gap-3">
-            <Zap className="w-5 h-5 text-purple-600" />
+        <Card className="p-2 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
+          <div className="flex items-center gap-1.5">
+            <Zap className="w-3.5 h-3.5 text-purple-600" />
             <div>
-              <h4 className="font-medium text-purple-900">Smart Insights</h4>
-              <p className="text-sm text-purple-800">
+              <h4 className="font-medium text-purple-900 text-xs">Smart Insights</h4>
+              <p className="text-[11px] text-purple-800">
                 Based on your patterns, we predict 15% less traffic if you leave 8 minutes earlier.
               </p>
             </div>

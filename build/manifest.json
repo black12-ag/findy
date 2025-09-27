@@ -1,6 +1,6 @@
 {
-  "name": "PathFinder Pro",
-  "short_name": "PathFinder",
+  "name": "FINDY",
+  "short_name": "FINDY",
   "description": "Advanced navigation app with AI-powered routing, real-time traffic, and social features",
   "start_url": "/",
   "display": "standalone",

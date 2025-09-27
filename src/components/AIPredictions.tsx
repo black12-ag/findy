@@ -10,99 +10,220 @@ import {
   Activity,
   Sparkles,
   ChevronRight,
-  Info
+  Info,
+  Navigation,
+  Cloud
 } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
 import { Alert, AlertDescription } from './ui/alert';
+import { aiPredictionsService } from '../services/aiPredictionsService';
+import { useLocation } from '../contexts/LocationContext';
+import { useNavigation } from '../contexts/NavigationContext';
+import { logger } from '../utils/logger';
+import { toast } from 'sonner';
 
 interface PredictionData {
-  type: 'traffic' | 'parking' | 'departure' | 'weather' | 'event';
+  type: 'traffic' | 'parking' | 'departure' | 'weather' | 'event' | 'route';
   confidence: number;
   title: string;
   description: string;
   suggestion?: string;
   impact?: 'low' | 'medium' | 'high';
   timeframe?: string;
+  actionData?: any;
 }
 
 interface AIPredictionsProps {
   destination?: string;
   currentLocation?: string;
-  onSuggestionAccept?: (suggestion: string) => void;
+  onSuggestionAccept?: (suggestion: any) => void;
+  map?: google.maps.Map;
 }
 
-export function AIPredictions({ destination, currentLocation, onSuggestionAccept }: AIPredictionsProps) {
+export function AIPredictions({ destination, currentLocation, onSuggestionAccept, map }: AIPredictionsProps) {
   const [predictions, setPredictions] = useState<PredictionData[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPrediction, setSelectedPrediction] = useState<PredictionData | null>(null);
+  const [trafficLayerEnabled, setTrafficLayerEnabled] = useState(false);
+  const [parkingMarkers, setParkingMarkers] = useState<google.maps.Marker[]>([]);
+  
+  const { currentLocation: locationData } = useLocation();
+  const { selectedLocation } = useNavigation();
 
+  // Initialize AI service with map
   useEffect(() => {
-    // Simulate AI predictions loading
-    const timer = setTimeout(() => {
-      setPredictions([
-        {
-          type: 'traffic',
-          confidence: 92,
-          title: 'Heavy Traffic Expected',
-          description: 'Rush hour traffic building on I-405 North',
-          suggestion: 'Leave 15 minutes earlier or take SR-520',
-          impact: 'high',
-          timeframe: 'Next 2 hours'
-        },
-        {
-          type: 'parking',
-          confidence: 78,
-          title: 'Limited Parking Available',
-          description: 'Downtown parking garages 85% full',
-          suggestion: 'Reserve spot at Park Plaza ($12/day)',
-          impact: 'medium',
-          timeframe: 'Current'
-        },
-        {
+    if (map && window.google) {
+      aiPredictionsService.initialize(map);
+      logger.info('AI predictions service initialized with map');
+    }
+  }, [map]);
+
+  // Load predictions based on real data
+  useEffect(() => {
+    const loadPredictions = async () => {
+      if (!locationData || !selectedLocation) {
+        // Use mock data if no real locations
+        setLoading(true);
+        setTimeout(() => {
+          setPredictions([
+            {
+              type: 'traffic',
+              confidence: 92,
+              title: 'Heavy Traffic Expected',
+              description: 'Rush hour traffic building on major routes',
+              suggestion: 'Leave 15 minutes earlier or take alternative route',
+              impact: 'high',
+              timeframe: 'Next 2 hours'
+            },
+            {
+              type: 'parking',
+              confidence: 78,
+              title: 'Limited Parking Available',
+              description: 'Nearby parking areas 85% full',
+              suggestion: 'Reserve spot in advance',
+              impact: 'medium',
+              timeframe: 'Current'
+            },
+          ]);
+          setLoading(false);
+        }, 1000);
+        return;
+      }
+
+      setLoading(true);
+      const newPredictions: PredictionData[] = [];
+
+      try {
+        // Analyze real-time traffic
+        const trafficData = await aiPredictionsService.analyzeTraffic(
+          locationData,
+          selectedLocation
+        );
+        
+        if (trafficData.estimatedDelay > 5) {
+          newPredictions.push({
+            type: 'traffic',
+            confidence: 85,
+            title: `${trafficData.severity.charAt(0).toUpperCase() + trafficData.severity.slice(1)} Traffic Detected`,
+            description: `${trafficData.estimatedDelay} min delay on primary route`,
+            suggestion: trafficData.alternativeRoutes[0]
+              ? `Take ${trafficData.alternativeRoutes[0].via} to save ${trafficData.alternativeRoutes[0].timeSaved} min`
+              : 'Consider leaving earlier',
+            impact: trafficData.severity === 'severe' ? 'high' : trafficData.severity === 'high' ? 'high' : 'medium',
+            timeframe: 'Current',
+            actionData: { trafficData, showTrafficLayer: true }
+          });
+        }
+
+        // Analyze parking availability
+        const parkingData = await aiPredictionsService.predictParking(selectedLocation);
+        if (parkingData.bestOption) {
+          newPredictions.push({
+            type: 'parking',
+            confidence: Math.round(parkingData.bestOption.availability),
+            title: 'Parking Recommendation',
+            description: `${parkingData.bestOption.name} - ${Math.round(parkingData.bestOption.walkingDistance / 80)} min walk`,
+            suggestion: `${parkingData.bestOption.availability}% available at ${parkingData.bestOption.pricing}`,
+            impact: parkingData.averageOccupancy > 70 ? 'high' : 'medium',
+            timeframe: 'At destination',
+            actionData: { parkingSpots: parkingData.nearbySpots }
+          });
+        }
+
+        // Calculate optimal departure time
+        const arrivalTarget = new Date();
+        arrivalTarget.setHours(arrivalTarget.getHours() + 1); // Example: arrive in 1 hour
+        
+        const departureRec = await aiPredictionsService.recommendDepartureTime(
+          locationData,
+          selectedLocation,
+          arrivalTarget
+        );
+        
+        newPredictions.push({
           type: 'departure',
-          confidence: 95,
-          title: 'Optimal Departure Time',
-          description: 'Based on your calendar and traffic patterns',
-          suggestion: 'Leave at 2:45 PM for 3:30 PM meeting',
+          confidence: departureRec.confidence,
+          title: 'Recommended Departure',
+          description: departureRec.reasoning,
+          suggestion: `Leave at ${departureRec.departureTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
           impact: 'low',
           timeframe: 'Today'
-        },
-        {
-          type: 'weather',
-          confidence: 88,
-          title: 'Rain Expected',
-          description: 'Heavy rain starting around 5 PM',
-          suggestion: 'Plan indoor parking or bring umbrella',
-          impact: 'medium',
-          timeframe: 'This evening'
-        },
-        {
-          type: 'event',
-          confidence: 71,
-          title: 'Sports Event Nearby',
-          description: 'Mariners game at 7:10 PM causing congestion',
-          suggestion: 'Avoid stadium area after 6 PM',
-          impact: 'high',
-          timeframe: 'Tonight'
-        }
-      ]);
-      setLoading(false);
-    }, 1500);
+        });
 
-    return () => clearTimeout(timer);
-  }, [destination]);
+        // Analyze weather impact
+        const weatherImpact = await aiPredictionsService.analyzeWeatherImpact(null);
+        if (weatherImpact.impact !== 'none') {
+          newPredictions.push({
+            type: 'weather',
+            confidence: 75,
+            title: `Weather: ${weatherImpact.condition.charAt(0).toUpperCase() + weatherImpact.condition.slice(1)}`,
+            description: weatherImpact.recommendations[0],
+            suggestion: weatherImpact.recommendations.join(', '),
+            impact: weatherImpact.impact === 'high' ? 'high' : 'medium',
+            timeframe: 'Current conditions'
+          });
+        }
+
+        setPredictions(newPredictions);
+      } catch (error) {
+        logger.error('Failed to load AI predictions', { error });
+        toast.error('Failed to load predictions');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPredictions();
+  }, [locationData, selectedLocation]);
 
   const getIcon = (type: string) => {
     switch (type) {
       case 'traffic': return TrendingUp;
       case 'parking': return Car;
       case 'departure': return Clock;
-      case 'weather': return AlertTriangle;
+      case 'weather': return Cloud;
       case 'event': return Calendar;
+      case 'route': return Navigation;
       default: return Activity;
+    }
+  };
+
+  const handlePredictionAction = (prediction: PredictionData) => {
+    if (!prediction.actionData) return;
+
+    // Handle traffic layer toggle
+    if (prediction.type === 'traffic' && prediction.actionData.showTrafficLayer) {
+      aiPredictionsService.showTrafficLayer(!trafficLayerEnabled);
+      setTrafficLayerEnabled(!trafficLayerEnabled);
+      toast.success(trafficLayerEnabled ? 'Traffic layer disabled' : 'Traffic layer enabled');
+    }
+
+    // Handle parking markers
+    if (prediction.type === 'parking' && prediction.actionData.parkingSpots && map) {
+      // Clear existing markers
+      parkingMarkers.forEach(marker => marker.setMap(null));
+      
+      if (parkingMarkers.length === 0) {
+        // Add new markers
+        const newMarkers = aiPredictionsService.addParkingMarkers(
+          prediction.actionData.parkingSpots,
+          map
+        );
+        setParkingMarkers(newMarkers);
+        toast.success('Showing parking options on map');
+      } else {
+        // Clear markers
+        setParkingMarkers([]);
+        toast.success('Parking markers hidden');
+      }
+    }
+
+    // Pass to parent handler for navigation actions
+    if (onSuggestionAccept) {
+      onSuggestionAccept(prediction);
     }
   };
 
@@ -159,7 +280,10 @@ export function AIPredictions({ destination, currentLocation, onSuggestionAccept
             <Card 
               key={index}
               className="p-4 cursor-pointer hover:shadow-md transition-shadow"
-              onClick={() => setSelectedPrediction(prediction)}
+              onClick={() => {
+                setSelectedPrediction(prediction);
+                handlePredictionAction(prediction);
+              }}
             >
               <div className="flex items-start gap-3">
                 <div className={`p-2 rounded-lg ${getImpactColor(prediction.impact)}`}>
@@ -203,12 +327,25 @@ export function AIPredictions({ destination, currentLocation, onSuggestionAccept
         })}
       </div>
 
-      {/* Prediction Accuracy */}
+      {/* Prediction Accuracy & Controls */}
       <Alert>
         <Activity className="w-4 h-4" />
-        <AlertDescription>
-          AI predictions improve over time based on your driving patterns and preferences.
-          Current accuracy: 84%
+        <AlertDescription className="flex items-center justify-between">
+          <span>AI predictions improve over time. Accuracy: 84%</span>
+          <div className="flex gap-2">
+            {trafficLayerEnabled && (
+              <Badge variant="secondary" className="text-xs">
+                <TrendingUp className="w-3 h-3 mr-1" />
+                Traffic Live
+              </Badge>
+            )}
+            {parkingMarkers.length > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                <Car className="w-3 h-3 mr-1" />
+                Parking Shown
+              </Badge>
+            )}
+          </div>
         </AlertDescription>
       </Alert>
 
@@ -232,9 +369,10 @@ export function AIPredictions({ destination, currentLocation, onSuggestionAccept
             <Button 
               className="flex-1"
               onClick={() => {
-                if (selectedPrediction.suggestion && onSuggestionAccept) {
-                  onSuggestionAccept(selectedPrediction.suggestion);
+                if (onSuggestionAccept) {
+                  onSuggestionAccept(selectedPrediction);
                 }
+                handlePredictionAction(selectedPrediction);
                 setSelectedPrediction(null);
               }}
             >

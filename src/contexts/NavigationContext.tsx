@@ -5,8 +5,9 @@
 
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { logger } from '../utils/logger';
-import { geofencingService, GeofenceRegion } from '../services/geofencingService';
 import { advancedNavigationIntelligenceService } from '../services/advancedNavigationIntelligence';
+import { geofencingService } from '../services/geofencingService';
+import { realAnalyticsService } from '../services/realAnalyticsService';
 
 interface Location {
   id: string;
@@ -159,11 +160,45 @@ const navigationReducer = (state: NavigationState, action: NavigationAction): Na
       };
 
     case 'STOP_NAVIGATION':
+      // Record completed trip for analytics
+      if (state.currentRoute && state.currentLocation && state.selectedLocation) {
+        const tripStartTime = state.currentRoute.createdAt;
+        const tripEndTime = new Date().toISOString();
+        const duration = Math.round((new Date().getTime() - new Date(tripStartTime).getTime()) / 1000);
+        
+        realAnalyticsService.recordTrip({
+          from: {
+            name: state.currentRoute.from.name || 'Start Location',
+            lat: state.currentRoute.from.lat,
+            lng: state.currentRoute.from.lng
+          },
+          to: {
+            name: state.currentRoute.to?.name || state.selectedLocation.name,
+            lat: state.currentRoute.to?.lat || state.selectedLocation.lat,
+            lng: state.currentRoute.to?.lng || state.selectedLocation.lng
+          },
+          distance: typeof state.currentRoute.distance === 'string' ? 
+            parseFloat(state.currentRoute.distance) * 1000 : // Convert km to meters
+            5000, // Default 5km if parsing fails
+          duration: duration,
+          mode: state.transportMode,
+          startTime: tripStartTime,
+          endTime: tripEndTime
+        });
+        
+        logger.info('Trip recorded for analytics', {
+          duration,
+          mode: state.transportMode,
+          distance: state.currentRoute.distance
+        });
+      }
+      
       return {
         ...state,
+        currentRoute: null,
+        alternativeRoutes: [],
         navigationStatus: 'idle',
         isNavigating: false,
-        currentRoute: null,
       };
 
     case 'PAUSE_NAVIGATION':
@@ -193,15 +228,6 @@ const navigationReducer = (state: NavigationState, action: NavigationAction): Na
       return {
         ...state,
         routePreferences: { ...state.routePreferences, ...action.payload },
-      };
-
-    case 'CLEAR_ROUTES':
-      return {
-        ...state,
-        currentRoute: null,
-        alternativeRoutes: [],
-        navigationStatus: 'idle',
-        isNavigating: false,
       };
 
     case 'CLEAR_SELECTION':
@@ -298,7 +324,7 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
     // Initialize advanced navigation services
     const initializeAdvancedServices = async () => {
       try {
-        if (state.routePreferences.enableGeofencing) {
+if (state.routePreferences.enableGeofencing && !import.meta.env.DEV) {
           const geofencingStarted = await geofencingService.startMonitoring();
           if (geofencingStarted) {
             logger.info('Geofencing service initialized successfully');

@@ -57,5 +57,10 @@
       port: 3000,
       open: true,
       strictPort: true,
+      host: true,
+      hmr: {
+        port: 3001,
+        overlay: true,
+      },
     },
   });

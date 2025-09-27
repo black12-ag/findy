@@ -27,8 +27,8 @@ interface RouteHistory {
 class RoutesService {
   private routeHistory: RouteHistory[] = [];
   private savedRoutes: Map<string, StoredRoute> = new Map();
-  private readonly ROUTE_HISTORY_KEY = 'comtion_route_history';
-  private readonly SAVED_ROUTES_KEY = 'comtion_saved_routes';
+  private readonly ROUTE_HISTORY_KEY = 'findy_route_history';
+  private readonly SAVED_ROUTES_KEY = 'findy_saved_routes';
   private readonly MAX_HISTORY_ITEMS = 50;
   constructor() {
     this.loadFromLocalStorage();

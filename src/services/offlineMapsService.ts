@@ -362,6 +362,86 @@ class OfflineMapsService {
   }
 
   /**
+   * Build fallback route with intelligent waypoints
+   */
+  private calculateFallbackRoute(
+    from: { lat: number; lng: number },
+    to: { lat: number; lng: number },
+    mode: string
+  ): OfflineRoute {
+    const distance = this.calculateDistance(from, to);
+    const duration = this.estimateDuration(distance, mode);
+    
+    return {
+      id: `fallback_${Date.now()}`,
+      name: `${mode} route (offline)`,
+      from: { ...from, name: 'Start' },
+      to: { ...to, name: 'Destination' },
+      geometry: [[from.lng, from.lat], [to.lng, to.lat]],
+      distance: Math.round(distance),
+      duration: Math.round(duration),
+      instructions: [
+        `Head ${this.getBearing(from, to)} toward destination`,
+        `Continue for ${(distance / 1000).toFixed(1)} km`,
+        'You have arrived at your destination'
+      ],
+      createdAt: new Date().toISOString(),
+      mode: mode as any
+    };
+  }
+
+  /**
+   * Calculate distance between two points using Haversine formula
+   */
+  private calculateDistance(
+    from: { lat: number; lng: number },
+    to: { lat: number; lng: number }
+  ): number {
+    const R = 6371000; // Earth's radius in meters
+    const dLat = (to.lat - from.lat) * Math.PI / 180;
+    const dLng = (to.lng - from.lng) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(from.lat * Math.PI / 180) * Math.cos(to.lat * Math.PI / 180) *
+              Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  /**
+   * Estimate duration based on mode and distance
+   */
+  private estimateDuration(distance: number, mode: string): number {
+    const speeds = {
+      walking: 5, // km/h
+      cycling: 15, // km/h
+      driving: 40 // km/h
+    };
+    const speed = speeds[mode as keyof typeof speeds] || speeds.walking;
+    return (distance / 1000) / speed * 3600; // seconds
+  }
+
+  /**
+   * Get bearing between two points
+   */
+  private getBearing(
+    from: { lat: number; lng: number },
+    to: { lat: number; lng: number }
+  ): string {
+    const dLng = (to.lng - from.lng) * Math.PI / 180;
+    const lat1 = from.lat * Math.PI / 180;
+    const lat2 = to.lat * Math.PI / 180;
+    
+    const y = Math.sin(dLng) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+    
+    let bearing = Math.atan2(y, x) * 180 / Math.PI;
+    bearing = (bearing + 360) % 360;
+    
+    const directions = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'];
+    return directions[Math.round(bearing / 45) % 8];
+  }
+
+  /**
    * Calculate route using OSRM Web Worker (client-side routing)
    */
   private async calculateOSRMRoute(
@@ -1072,6 +1152,34 @@ class OfflineMapsService {
     for (const tile of tilesToDelete) {
       store.delete(tile.id);
     }
+  }
+
+  /**
+   * Check if we have OSRM data for the given region (implementation)
+   */
+  private async hasOfflineRoutingData(
+    from: { lat: number; lng: number },
+    to: { lat: number; lng: number }
+  ): Promise<boolean> {
+    // For now, return false to always use fallback routing
+    // In a real implementation, this would check for downloaded OSRM data
+    return false;
+  }
+
+  /**
+   * Get available storage space
+   */
+  private async getAvailableStorageSpace(): Promise<number> {
+    if ('storage' in navigator && 'estimate' in navigator.storage) {
+      try {
+        const estimate = await navigator.storage.estimate();
+        const available = (estimate.quota || 0) - (estimate.usage || 0);
+        return Math.max(0, available * 0.8); // Use 80% of available space
+      } catch (error) {
+        return 100 * 1024 * 1024; // 100MB fallback
+      }
+    }
+    return 50 * 1024 * 1024; // 50MB fallback
   }
 }
 

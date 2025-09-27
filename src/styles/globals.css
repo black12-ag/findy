@@ -162,8 +162,51 @@
     @apply border-border outline-ring/50;
   }
 
+  html {
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Dark-mode hardening for legacy utility classes */
+  .dark {
+    color-scheme: dark;
+  }
+
+  .dark .bg-white,
+  .dark .bg-gray-50,
+  .dark .bg-gray-100 {
+    background-color: var(--card) !important;
+  }
+
+  .dark .bg-gray-200,
+  .dark .bg-gray-300 {
+    background-color: var(--muted) !important;
+  }
+
+  .dark .text-black,
+  .dark .text-gray-900 {
+    color: var(--foreground) !important;
+  }
+
+  .dark .text-gray-700,
+  .dark .text-gray-600,
+  .dark .text-gray-500 {
+    color: var(--muted-foreground) !important;
+  }
+
+  .dark .border-gray-100,
+  .dark .border-gray-200,
+  .dark .border-gray-300 {
+    border-color: var(--border) !important;
+  }
+
+  .dark .ring-1,
+  .dark .ring-2,
+  .dark .ring {
+    --tw-ring-color: var(--ring);
   }
 }
 

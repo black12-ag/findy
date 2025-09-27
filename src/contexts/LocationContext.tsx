@@ -167,25 +167,44 @@ interface LocationProviderProps {
 
 export function LocationProvider({ children }: LocationProviderProps) {
   const [state, dispatch] = useReducer(locationReducer, initialState);
-  
+
+  // DEV-ONLY: Set default location only once on mount
+  useEffect(() => {
+    if (import.meta.env.DEV && !state.currentLocation) {
+      const defaultDevLocation: LocationData = {
+        lat: 37.7749, // San Francisco
+        lng: -122.4194,
+        accuracy: 10,
+        altitude: 50,
+        speed: 0,
+        heading: 0,
+        timestamp: Date.now(),
+      };
+      dispatch({ type: 'SET_CURRENT_LOCATION', location: defaultDevLocation });
+      dispatch({ type: 'SET_PERMISSION_STATUS', status: 'granted' });
+      logger.info('Using default development location', defaultDevLocation);
+    }
+  }, []); // Empty dependency array - only run once on mount
+
   // Use the geolocation service
-  const { 
-    position, 
-    error, 
-    permissionStatus, 
-    startTracking, 
+  const {
+    position,
+    error,
+    permissionStatus,
+    startTracking,
     stopTracking,
     getCurrentPosition: getGPSPosition,
-    isAccurateEnoughForNavigation 
+    isAccurateEnoughForNavigation
   } = useGeolocation({
     enableHighAccuracy: state.highAccuracy,
-    trackLocation: state.isTrackingLocation,
+    trackLocation: state.isTrackingLocation && !import.meta.env.DEV, // Disable in DEV
     timeout: 15000,
     maximumAge: 10000,
   });
 
   // Update location when GPS position changes
   useEffect(() => {
+    if (import.meta.env.DEV) return;
     if (position) {
       const locationData: LocationData = {
         lat: position.lat,
@@ -215,6 +234,7 @@ export function LocationProvider({ children }: LocationProviderProps) {
 
   // Update permission status
   useEffect(() => {
+    if (import.meta.env.DEV) return;
     if (permissionStatus && permissionStatus !== 'unknown') {
       dispatch({ type: 'SET_PERMISSION_STATUS', status: permissionStatus as PermissionState });
       
@@ -229,6 +249,7 @@ export function LocationProvider({ children }: LocationProviderProps) {
 
   // Update error status
   useEffect(() => {
+    if (import.meta.env.DEV) return;
     if (error) {
       const errorMessage = getLocationErrorMessage(error);
       dispatch({ type: 'SET_LOCATION_ERROR', error: errorMessage });
@@ -241,6 +262,11 @@ export function LocationProvider({ children }: LocationProviderProps) {
 
   // Actions
   const startLocationTracking = useCallback(async () => {
+    if (import.meta.env.DEV) {
+      dispatch({ type: 'SET_TRACKING_STATUS', isTracking: true });
+      logger.info('Mock location tracking started');
+      return;
+    }
     try {
       dispatch({ type: 'SET_TRACKING_STATUS', isTracking: true });
       await startTracking();
@@ -253,6 +279,11 @@ export function LocationProvider({ children }: LocationProviderProps) {
   }, [startTracking]);
 
   const stopLocationTracking = useCallback(() => {
+    if (import.meta.env.DEV) {
+      dispatch({ type: 'SET_TRACKING_STATUS', isTracking: false });
+      logger.info('Mock location tracking stopped');
+      return;
+    }
     dispatch({ type: 'SET_TRACKING_STATUS', isTracking: false });
     stopTracking();
     logger.info('Location tracking stopped');
@@ -276,6 +307,19 @@ export function LocationProvider({ children }: LocationProviderProps) {
   }, []);
 
   const getCurrentPosition = useCallback(async (): Promise<LocationData> => {
+    if (import.meta.env.DEV) {
+      logger.info('Returning mock current position for DEV');
+      const defaultDevLocation: LocationData = {
+        lat: 37.7749,
+        lng: -122.4194,
+        accuracy: 10,
+        altitude: 50,
+        speed: 0,
+        heading: 0,
+        timestamp: Date.now(),
+      };
+      return Promise.resolve(defaultDevLocation);
+    }
     const gpsPosition = await getGPSPosition();
     const locationData: LocationData = {
       lat: gpsPosition.lat,
@@ -313,6 +357,7 @@ export function LocationProvider({ children }: LocationProviderProps) {
   }, [state.currentLocation]);
 
   const isLocationAccurate = useCallback((): boolean => {
+    if (import.meta.env.DEV) return true; // Always accurate in DEV
     if (!position) return false;
     return isAccurateEnoughForNavigation(position);
   }, [position, isAccurateEnoughForNavigation]);

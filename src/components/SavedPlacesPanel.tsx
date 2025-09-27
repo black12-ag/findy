@@ -61,7 +61,7 @@ export function SavedPlacesPanel({ places, onLocationSelect, onBack, onAddPlace 
     const fetchSaved = async () => {
       try {
         const res = await placesService.getUserPlaces();
-        const mapped: Location[] = res.places.map((p) => {
+        const mapped: Location[] = res.data.map((p) => {
           const fp = placesService.formatPlace(p);
           return {
             id: fp.id,
@@ -81,8 +81,7 @@ export function SavedPlacesPanel({ places, onLocationSelect, onBack, onAddPlace 
       }
     };
     fetchSaved();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [places]);
 
   // Mock data for different tabs
   const recentPlaces = [

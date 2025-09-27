@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { realAnalyticsService } from '../services/realAnalyticsService';
 import { 
   ArrowLeft,
   TrendingUp,
@@ -28,41 +29,28 @@ interface AnalyticsDashboardProps {
 }
 
 export function AnalyticsDashboard({ onBack }: AnalyticsDashboardProps) {
-  const [timeRange, setTimeRange] = useState('week');
+  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year' | 'all'>('week');
   const [selectedMetric, setSelectedMetric] = useState('all');
+  const [analyticsData, setAnalyticsData] = useState(realAnalyticsService.getAnalytics('week'));
+
+  // Update analytics when time range changes
+  useEffect(() => {
+    const data = realAnalyticsService.getAnalytics(timeRange);
+    setAnalyticsData(data);
+  }, [timeRange]);
 
   const stats = {
-    totalDistance: '1,234 mi',
-    totalTime: '48h 32m',
-    avgSpeed: '28 mph',
-    co2Saved: '124 kg',
-    fuelSaved: '$89',
-    ecoScore: 82
+    totalDistance: analyticsData.totalDistance,
+    totalTime: analyticsData.totalTime,
+    avgSpeed: analyticsData.avgSpeed,
+    co2Saved: analyticsData.co2Saved,
+    fuelSaved: analyticsData.fuelSaved,
+    ecoScore: analyticsData.ecoScore
   };
 
-  const weeklyData = [
-    { day: 'Mon', miles: 45, trips: 3 },
-    { day: 'Tue', miles: 32, trips: 2 },
-    { day: 'Wed', miles: 67, trips: 4 },
-    { day: 'Thu', miles: 28, trips: 2 },
-    { day: 'Fri', miles: 89, trips: 5 },
-    { day: 'Sat', miles: 120, trips: 6 },
-    { day: 'Sun', miles: 56, trips: 3 }
-  ];
-
-  const transportModes = [
-    { mode: 'Car', percentage: 45, color: 'bg-blue-500' },
-    { mode: 'Transit', percentage: 30, color: 'bg-green-500' },
-    { mode: 'Walking', percentage: 15, color: 'bg-yellow-500' },
-    { mode: 'Cycling', percentage: 10, color: 'bg-purple-500' }
-  ];
-
-  const achievements = [
-    { id: 1, name: 'Eco Warrior', description: 'Saved 100kg CO2', icon: '🌱', unlocked: true },
-    { id: 2, name: 'Explorer', description: '1000 miles traveled', icon: '🗺️', unlocked: true },
-    { id: 3, name: 'Transit Hero', description: '50 transit trips', icon: '🚇', unlocked: false },
-    { id: 4, name: 'Early Bird', description: '20 morning commutes', icon: '🌅', unlocked: true }
-  ];
+  const weeklyData = analyticsData.weeklyData;
+  const transportModes = analyticsData.transportModes;
+  const achievements = analyticsData.achievements;
 
   return (
     <div className="h-full bg-gray-50 flex flex-col">

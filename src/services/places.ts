@@ -5,22 +5,193 @@ import type {
   PlaceSearchResult, 
   PaginatedResponse 
 } from '../types/api';
-import { ORSPOIService, ORSGeocodingService, setORSApiKey } from './openRouteService';
+import googleMapsService from './googleMapsService';
+import { ORSPOIService, ORSGeocodingService, setORSApiKey } from './googleUnifiedService';
+import { logger } from '../utils/logger';
 
 class PlacesService {
   private useRealAPI: boolean = false;
+  private useGoogleMaps: boolean = false;
   
   constructor() {
-    // Check if ORS API key is available
-    const apiKey = import.meta.env?.VITE_ORS_API_KEY || '';
-    this.useRealAPI = !!apiKey;
+    // Check if Google Maps API is available
+    const googleApiKey = import.meta.env?.VITE_GOOGLE_MAPS_API_KEY || '';
+    this.useGoogleMaps = !!googleApiKey && googleApiKey !== 'YOUR_GOOGLE_MAPS_API_KEY_HERE';
+    
+    // Check if ORS API key is available as fallback
+    const orsApiKey = import.meta.env?.VITE_ORS_API_KEY || '';
+    this.useRealAPI = !!orsApiKey;
     if (this.useRealAPI) {
-      setORSApiKey(apiKey);
+      setORSApiKey(orsApiKey);
     }
   }
 
   /**
-   * Search for places using ORS POI service if available, fallback to API
+   * Search for places using Google Maps with ORS fallback
+   */
+  async searchPlacesEnhanced(
+    location: { lat: number; lng: number },
+    query?: string,
+    category?: string,
+    radius: number = 1000
+  ): Promise<PlaceSearchResult[]> {
+    // Try Google Maps first
+    if (this.useGoogleMaps) {
+      try {
+        const googleResults = await this.searchPlacesWithGoogle(location, query, category, radius);
+        if (googleResults.length > 0) {
+          return googleResults;
+        }
+      } catch (error) {
+        logger.error('Google Maps places search failed, falling back to ORS', error);
+      }
+    }
+    
+    // Fallback to ORS
+    return this.searchPlacesWithORS(location, query, category, radius);
+  }
+
+  /**
+   * Search for places using Google Maps Places API
+   */
+  async searchPlacesWithGoogle(
+    location: { lat: number; lng: number },
+    query?: string,
+    category?: string,
+    radius: number = 1000
+  ): Promise<PlaceSearchResult[]> {
+    try {
+      if (!googleMapsService.isAvailable()) {
+        await googleMapsService.initialize();
+      }
+
+      if (!googleMapsService.isAvailable()) {
+        throw new Error('Google Maps not available');
+      }
+
+      let googlePlaces: any[];
+      
+      if (query) {
+        // Text search for specific query
+        googlePlaces = await googleMapsService.searchPlaces({
+          query: query,
+          location: { lat: location.lat, lng: location.lng },
+          radius,
+        });
+      } else if (category) {
+        // Category-based search using nearby search
+        const googleType = this.mapCategoryToGoogleType(category);
+        googlePlaces = await googleMapsService.searchNearbyPlaces({
+          location: { lat: location.lat, lng: location.lng },
+          radius,
+          type: googleType || 'establishment',
+        });
+      } else {
+        // General places search
+        googlePlaces = await googleMapsService.searchNearbyPlaces({
+          location: { lat: location.lat, lng: location.lng },
+          radius,
+          type: 'establishment',
+        });
+      }
+      
+      logger.info('Google Places search completed', { 
+        resultCount: googlePlaces.length, 
+        query, 
+        category,
+        location 
+      });
+
+      // Convert Google Places results to our format
+      return googlePlaces.map((place, index) => ({
+        id: place.place_id || `google_place_${index}`,
+        name: place.name || 'Unnamed Place',
+        address: place.formatted_address || place.vicinity || 'Address not available',
+        location: {
+          lat: place.geometry?.location?.lat() || 0,
+          lng: place.geometry?.location?.lng() || 0
+        },
+        category: this.mapGoogleTypesToCategory(place.types || []),
+        rating: place.rating,
+        openingHours: {
+          isOpen: place.opening_hours?.isOpen() || true
+        },
+        isSaved: false,
+        photos: place.photos?.map(photo => photo.getUrl({ maxWidth: 400, maxHeight: 400 })) || [],
+        priceLevel: place.price_level,
+        website: place.website,
+        phoneNumber: place.formatted_phone_number,
+      }));
+    } catch (error) {
+      logger.error('Google Places search failed', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Map category to Google Places type
+   */
+  private mapCategoryToGoogleType(category?: string): string | undefined {
+    const categoryMap: Record<string, string> = {
+      'restaurants': 'restaurant',
+      'gas_stations': 'gas_station',
+      'parking': 'parking',
+      'banks': 'bank',
+      'hospitals': 'hospital',
+      'shopping': 'store',
+      'hotels': 'lodging',
+      'entertainment': 'amusement_park',
+      'restaurant': 'restaurant',
+      'gas_station': 'gas_station',
+      'hospital': 'hospital',
+      'school': 'school',
+      'store': 'store',
+      'tourist_attraction': 'tourist_attraction',
+      'lodging': 'lodging',
+      'bank': 'bank',
+      'gym': 'gym',
+    };
+    
+    return category ? categoryMap[category] : undefined;
+  }
+
+  /**
+   * Map Google Places types to our categories
+   */
+  private mapGoogleTypesToCategory(types: string[]): string {
+    const typeMap: Record<string, string> = {
+      'restaurant': 'Restaurant',
+      'food': 'Restaurant',
+      'meal_takeaway': 'Restaurant',
+      'gas_station': 'Gas Station',
+      'hospital': 'Healthcare',
+      'doctor': 'Healthcare',
+      'pharmacy': 'Healthcare',
+      'school': 'Education',
+      'university': 'Education',
+      'store': 'Shopping',
+      'shopping_mall': 'Shopping',
+      'supermarket': 'Shopping',
+      'tourist_attraction': 'Attraction',
+      'amusement_park': 'Attraction',
+      'lodging': 'Accommodation',
+      'bank': 'Finance',
+      'atm': 'Finance',
+      'gym': 'Fitness',
+      'spa': 'Beauty & Wellness',
+    };
+    
+    for (const type of types) {
+      if (typeMap[type]) {
+        return typeMap[type];
+      }
+    }
+    
+    return 'Other';
+  }
+
+  /**
+   * Search for places using ORS POI service (fallback)
    */
   async searchPlacesWithORS(
     location: { lat: number; lng: number },
@@ -175,15 +346,7 @@ class PlacesService {
     favorites?: boolean;
     page?: number;
     limit?: number;
-  } = {}): Promise<{
-    places: Place[];
-    pagination: {
-      page: number;
-      limit: number;
-      total: number;
-      totalPages: number;
-    };
-  }> {
+  } = {}): Promise<PaginatedResponse<Place>> {
     const searchParams = new URLSearchParams();
     
     if (params.category) searchParams.append('category', params.category);

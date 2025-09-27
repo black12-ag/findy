@@ -9,7 +9,7 @@ import {
   Target, 
   Play, 
   Pause, 
-  Stop, 
+  StopCircle, 
   TrendingUp, 
   AlertTriangle,
   CheckCircle,
@@ -333,7 +333,7 @@ const ExperimentManagement: React.FC = () => {
             </Button>
             
             <Button variant="outline" size="sm">
-              <Stop className="w-4 h-4 mr-2" />
+              <StopCircle className="w-4 h-4 mr-2" />
               End Test
             </Button>
           </div>

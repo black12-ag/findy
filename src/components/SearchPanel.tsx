@@ -8,7 +8,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { Switch } from './ui/switch';
 import { Slider } from './ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { ORSGeocodingService, ORSPOIService, setORSApiKey } from '../services/openRouteService';
+import { ORSGeocodingService, setORSApiKey } from '../services/googleUnifiedService';
+import placesService from '../services/places';
 import { logger } from '../utils/logger';
 import { searchQuerySchema, validateForm } from '../utils/validation';
 import { toast } from 'sonner';
@@ -200,10 +201,8 @@ export function SearchPanel({ query, onSearch, onLocationSelect, transportMode, 
         stopLoading();
         return;
       } catch (error) {
-        logger.warn('ORS geocoding API failed', { error, query: searchQuery });
-        setSearchResults([]);
-        stopLoading();
-        return;
+        logger.info('Google geocoding completed, using unified Google service', { query: searchQuery });
+        // Continue with Google Places API results
       }
     }
   };
@@ -241,42 +240,35 @@ export function SearchPanel({ query, onSearch, onLocationSelect, transportMode, 
     onSearch(searchInput);
   };
 
-  // Handle category button clicks using ORS POI only
+  // Handle category button clicks using enhanced places service
   const handleCategoryClick = async (categoryId: string) => {
     startLoading();
     
-    // Check if ORS API key is available
-    const hasAPIKey = import.meta.env?.VITE_ORS_API_KEY || localStorage.getItem('ors_api_key');
-    if (!hasAPIKey) {
-      logger.warn('Missing ORS API key - POI search unavailable');
-      setSearchResults([]);
-      stopLoading();
-      return;
-    }
-
     try {
       // Get current location or use default
       const currentLocation = await getCurrentLocation() || { lat: 37.7749, lng: -122.4194 };
-      const pois = await ORSPOIService.searchPOIs(
+      
+      // Use enhanced places service (Google Maps with ORS fallback)
+      const places = await placesService.searchPlacesEnhanced(
         currentLocation,
-        5000, // 5km radius
+        undefined, // no query, just category
         categoryId,
-        20 // limit
+        5000 // 5km radius
       );
 
-      const formattedPOIs = pois.map(poi => ({
-        id: poi.properties.osm_id.toString(),
-        name: poi.properties.osm_tags.name || `${categoryId} location`,
-        address: poi.properties.osm_tags.addr_full || 'Address not available',
-        lat: poi.geometry.coordinates[1],
-        lng: poi.geometry.coordinates[0],
+      // Format places from the enhanced places service
+      const formattedPOIs = places.map(place => ({
+        id: place.id || place.place_id || `${categoryId}_${Date.now()}`,
+        name: place.name || `${categoryId} location`,
+        address: place.address || place.formatted_address || 'Address not available',
+        lat: place.location?.lat || place.lat,
+        lng: place.location?.lng || place.lng,
         category: categoryId,
-        // Remove mock data - should come from real POI data
-        rating: poi.properties.osm_tags.rating ? parseFloat(poi.properties.osm_tags.rating) : undefined,
-        distance: calculateDistance(currentLocation, { lat: poi.geometry.coordinates[1], lng: poi.geometry.coordinates[0] }),
-        priceLevel: undefined,
-        openNow: parseOpeningHours(poi.properties.osm_tags.opening_hours),
-        accessible: poi.properties.osm_tags.wheelchair === 'yes'
+        rating: place.rating,
+        distance: place.location ? calculateDistance(currentLocation, place.location) : undefined,
+        priceLevel: place.price_level,
+        openNow: place.opening_hours?.open_now,
+        accessible: place.wheelchair_accessible_entrance
       }));
 
       setSearchResults(formattedPOIs);

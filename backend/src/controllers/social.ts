@@ -134,7 +134,7 @@ export const sendFriendRequest = async (
 
     res.status(201).json({
       success: true,
-      data: friendRequest,
+      data: friendRequest as any,
     });
   } catch (error) {
     logger.error('Error sending friend request:', error);
@@ -202,7 +202,7 @@ export const respondToFriendRequest = async (
 
     res.status(200).json({
       success: true,
-      data: updatedRequest,
+      data: updatedRequest as any,
     });
   } catch (error) {
     logger.error('Error responding to friend request:', error);
@@ -268,7 +268,7 @@ export const getFriends = async (
 
     res.status(200).json({
       success: true,
-      data: friends,
+      data: friends as any,
       meta: {
         page,
         limit,

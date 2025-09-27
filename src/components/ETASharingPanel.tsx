@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { mockETAData } from '../utils/mockData';
 import { 
   X, 
   Share, 
@@ -54,6 +55,7 @@ export function ETASharingPanel({ route, onClose }: ETASharingPanelProps) {
   const { user, isAuthenticated } = useAuth();
   const { startLoading, stopLoading } = useLoading();
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
+  const [etaInfo] = useState(mockETAData);
   const [customMessage, setCustomMessage] = useState('');
   const [autoUpdate, setAutoUpdate] = useState(true);
   const [shareLocation, setShareLocation] = useState(true);

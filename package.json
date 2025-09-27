@@ -1,9 +1,10 @@
 {
-      "name": "Complete Navigation App Plan",
+      "name": "findy",
       "version": "0.1.0",
       "private": true,
       "type": "module",
       "dependencies": {
+            "@googlemaps/js-api-loader": "^1.16.10",
             "@radix-ui/react-accordion": "^1.2.3",
             "@radix-ui/react-alert-dialog": "^1.1.6",
             "@radix-ui/react-aspect-ratio": "^1.1.2",
@@ -30,6 +31,7 @@
             "@radix-ui/react-toggle": "^1.1.2",
             "@radix-ui/react-toggle-group": "^1.1.2",
             "@radix-ui/react-tooltip": "^1.1.8",
+            "@types/google.maps": "^3.58.1",
             "axios": "^1.12.2",
             "class-variance-authority": "^0.7.1",
             "clsx": "*",
@@ -58,6 +60,7 @@
             "@types/react-dom": "^19.1.9",
             "@vitejs/plugin-react-swc": "^3.10.2",
             "autoprefixer": "^10.4.21",
+            "concurrently": "^9.2.1",
             "postcss": "^8.5.6",
             "tailwindcss": "^4.1.13",
             "typescript": "^5.9.2",
@@ -65,6 +68,12 @@
       },
       "scripts": {
             "dev": "vite",
-            "build": "vite build"
+            "build": "vite build",
+            "start:all": "./start-all-services.sh",
+            "start:frontend": "vite",
+            "start:backend": "cd backend && npm run dev",
+    "start:services": "concurrently \"npm run start:frontend\" \"npm run start:backend\" --names \"frontend,backend\" --prefix-colors \"blue,green\"",
+            "check:ports": "lsof -i -P | grep LISTEN | grep -E ':(3000|3001|8000|6379|5432)'",
+            "stop:all": "lsof -ti :3000,:3001,:8000 | xargs kill -9 2>/dev/null || true"
       }
 }

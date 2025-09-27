@@ -22,7 +22,7 @@ import { Switch } from './ui/switch';
 import { Badge } from './ui/badge';
 import { directionsService } from '../services/directionsService';
 import { geocodingService } from '../services/geocodingService';
-import { ORSDirectionsService, ORSCoordinate } from '../services/openRouteService';
+import { ORSDirectionsService, setORSApiKey } from '../services/googleUnifiedService';
 import tspSolver, { TSPLocation, TSPConstraints, TSPOptimizationOptions } from '../services/tspSolver';
 
 interface Location {

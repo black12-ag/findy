@@ -25,9 +25,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { Alert, AlertDescription } from './ui/alert';
 import { logger } from '../utils/logger';
 import { toast } from 'sonner';
+import { useLocation } from '../contexts/LocationContext';
+import { useNavigation } from '../contexts/NavigationContext';
+import { aiPredictionsService } from '../services/aiPredictionsService';
 
 interface ParkingSpot {
   id: string;
+  placeId?: string;
   name: string;
   type: 'street' | 'garage' | 'lot' | 'valet';
   distance: string;
@@ -38,14 +42,20 @@ interface ParkingSpot {
   features: string[];
   hours: string;
   address: string;
+  location?: { lat: number; lng: number };
 }
 
 interface ParkingFinderProps {
   onBack: () => void;
   destination?: string;
+  map?: google.maps.Map;
+  onNavigateToParking?: (spot: ParkingSpot) => void;
+  onParkingResults?: (spots: ParkingSpot[]) => void;
 }
 
-export function ParkingFinder({ onBack, destination }: ParkingFinderProps) {
+export function ParkingFinder({ onBack, destination, map, onNavigateToParking, onParkingResults }: ParkingFinderProps) {
+  const { currentLocation } = useLocation();
+  const { setSelectedLocation, calculateRoute } = useNavigation();
   const [searchQuery, setSearchQuery] = useState(destination || '');
   const [selectedSpot, setSelectedSpot] = useState<ParkingSpot | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'street' | 'garage' | 'lot'>('all');
@@ -53,74 +63,227 @@ export function ParkingFinder({ onBack, destination }: ParkingFinderProps) {
   const [showPayment, setShowPayment] = useState(false);
   const [parkingSpots, setParkingSpots] = useState<ParkingSpot[]>([]);
   const [loading, setLoading] = useState(false);
+  const [parkingMarkers, setParkingMarkers] = useState<google.maps.Marker[]>([]);
+  const [isShowingRealData, setIsShowingRealData] = useState(true);
 
+  // Initialize map service
   useEffect(() => {
-    if (searchQuery) {
-      searchParkingSpots();
+    if (map && window.google) {
+      aiPredictionsService.initialize(map);
     }
-  }, [filterType, sortBy]);
+  }, [map]);
 
-  const searchParkingSpots = () => {
-    setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setParkingSpots([
-        {
-          id: '1',
-          name: 'Downtown Garage',
-          type: 'garage',
-          distance: '0.2 mi',
-          walkTime: '3 min',
-          price: '$4/hr',
-          availability: 85,
-          rating: 4.5,
-          features: ['Covered', 'EV Charging', 'Security', 'Wheelchair Access'],
-          hours: '24/7',
-          address: '123 Main St'
-        },
-        {
-          id: '2',
-          name: 'Street Parking - 5th Ave',
-          type: 'street',
-          distance: '0.1 mi',
-          walkTime: '2 min',
-          price: '$2/hr',
-          availability: 30,
-          rating: 3.8,
-          features: ['Metered', '2hr Max'],
-          hours: '8am-6pm',
-          address: '5th Avenue'
-        },
-        {
-          id: '3',
-          name: 'Plaza Parking Lot',
-          type: 'lot',
-          distance: '0.4 mi',
-          walkTime: '6 min',
-          price: '$3/hr',
-          availability: 60,
-          rating: 4.2,
-          features: ['Open Air', 'Security Cameras'],
-          hours: '6am-11pm',
-          address: '789 Plaza Dr'
-        },
-        {
-          id: '4',
-          name: 'Valet Service - Hotel Grand',
-          type: 'valet',
-          distance: '0.3 mi',
-          walkTime: '4 min',
-          price: '$20 flat',
-          availability: 95,
-          rating: 4.8,
-          features: ['Full Service', 'Indoor Parking'],
-          hours: '24/7',
-          address: '456 Hotel Ave'
-        }
-      ]);
-      setLoading(false);
-    }, 1000);
+  // Clear markers on unmount
+  useEffect(() => {
+    return () => {
+      parkingMarkers.forEach(marker => marker.setMap(null));
+    };
+  }, [parkingMarkers]);
+
+  // Trigger search on mount and whenever query, filters, or location changes
+  useEffect(() => {
+    searchParkingSpots();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterType, sortBy, searchQuery, currentLocation?.lat, currentLocation?.lng]);
+
+  const calculateDistance = (from: { lat: number; lng: number }, to: { lat: number; lng: number }) => {
+    if (!window.google || !window.google.maps.geometry) return 0;
+    const fromLatLng = new google.maps.LatLng(from.lat, from.lng);
+    const toLatLng = new google.maps.LatLng(to.lat, to.lng);
+    return google.maps.geometry.spherical.computeDistanceBetween(fromLatLng, toLatLng);
   };
+
+  const searchParkingSpots = async () => {
+    if (!currentLocation) return;
+    setLoading(true);
+    
+    try {
+      // Clear existing markers
+      parkingMarkers.forEach(marker => marker.setMap(null));
+      setParkingMarkers([]);
+
+      // Search for destination if provided, otherwise use current location
+      const searchLocation = destination && searchQuery 
+        ? await searchForDestination(searchQuery)
+        : currentLocation;
+
+      if (!searchLocation) {
+        throw new Error('Could not determine search location');
+      }
+
+      // Use Google Maps Places API to find parking
+      logger.info('Attempting to find parking spots via Google Places API', { searchLocation });
+      const parkingPrediction = await aiPredictionsService.predictParking(searchLocation);
+      
+      logger.info('Parking prediction result:', { 
+        spotsFound: parkingPrediction.nearbySpots.length,
+        spots: parkingPrediction.nearbySpots.map(s => ({ name: s.name, placeId: s.placeId }))
+      });
+      
+      if (parkingPrediction.nearbySpots.length > 0) {
+        // Convert to ParkingSpot format
+        const spots: ParkingSpot[] = parkingPrediction.nearbySpots.map(spot => {
+          const distanceMeters = calculateDistance(currentLocation, spot.location);
+          const distanceMiles = distanceMeters * 0.000621371;
+          const walkMinutes = Math.round((spot.walkingDistance || distanceMeters) / 80); // ~80m/min walking
+          
+          // Determine type based on Google Places types
+          let type: ParkingSpot['type'] = 'garage';
+          if (spot.type === 'street') type = 'street';
+          else if (spot.type === 'lot') type = 'lot';
+          
+          return {
+            id: spot.placeId,
+            placeId: spot.placeId,
+            name: spot.name,
+            type,
+            distance: `${distanceMiles.toFixed(1)} mi`,
+            walkTime: `${walkMinutes} min`,
+            price: spot.pricing,
+            availability: spot.availability,
+            rating: 4.0 + (spot.availability / 100), // Estimate rating from availability
+            features: type === 'garage' ? ['Covered', 'Security'] : ['Metered'],
+            hours: '24/7',
+            address: spot.name,
+            location: spot.location
+          };
+        });
+
+        // Apply filters
+        let filtered = spots;
+        if (filterType !== 'all') {
+          filtered = filtered.filter(s => s.type === filterType);
+        }
+
+        // Apply sorting
+        if (sortBy === 'distance') {
+          filtered.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
+        } else if (sortBy === 'price') {
+          const priceToNum = (p: string) => parseFloat(p.replace(/[^0-9.]/g, '') || '0');
+          filtered.sort((a, b) => priceToNum(a.price) - priceToNum(b.price));
+        } else if (sortBy === 'availability') {
+          filtered.sort((a, b) => b.availability - a.availability);
+        }
+
+        setParkingSpots(filtered);
+        setIsShowingRealData(true);
+        
+        // Call parent callback with results
+        if (onParkingResults) {
+          onParkingResults(filtered);
+        }
+        
+        // Add markers to map if available
+        if (map && filtered.length > 0) {
+          const spotsWithLocation = filtered.filter(s => s.location);
+          const markers = aiPredictionsService.addParkingMarkers(
+            spotsWithLocation.map(s => ({
+              placeId: s.placeId || s.id,
+              location: s.location!,
+              name: s.name,
+              pricing: s.price,
+              availability: s.availability,
+              walkingDistance: parseInt(s.walkTime) * 80,
+              type: s.type === 'garage' ? 'garage' : s.type === 'lot' ? 'lot' : 'street'
+            })),
+            map
+          );
+          setParkingMarkers(markers);
+          
+          // Center map on parking area
+          if (spotsWithLocation[0]?.location) {
+            map.setCenter(spotsWithLocation[0].location);
+            map.setZoom(15);
+          }
+        }
+      } else {
+        // Fallback to mock data if no results
+        logger.warn('No real parking spots found, using mock data');
+        toast.info('Using sample parking data for your area');
+        const mockSpots = getMockParkingSpots();
+        setParkingSpots(mockSpots);
+        setIsShowingRealData(false);
+        if (onParkingResults) {
+          onParkingResults(mockSpots);
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to search parking spots', { error: error.message });
+      toast.error('Google Places API error. Showing sample data.');
+      const mockSpots = getMockParkingSpots();
+      setParkingSpots(mockSpots);
+      setIsShowingRealData(false);
+      if (onParkingResults) {
+        onParkingResults(mockSpots);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const searchForDestination = async (query: string): Promise<{ lat: number; lng: number } | null> => {
+    if (!window.google) return null;
+    
+    return new Promise((resolve) => {
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({ address: query }, (results, status) => {
+        if (status === 'OK' && results && results[0]) {
+          const location = results[0].geometry.location;
+          resolve({ lat: location.lat(), lng: location.lng() });
+        } else {
+          resolve(null);
+        }
+      });
+    });
+  };
+
+  const getMockParkingSpots = (): ParkingSpot[] => [
+    {
+      id: 'mock1',
+      name: 'City Center Garage',
+      type: 'garage',
+      distance: '0.2 mi',
+      walkTime: '3 min',
+      price: '$4/hr',
+      availability: 85,
+      rating: 4.5,
+      features: ['Covered', 'Security', 'EV Charging'],
+      hours: '24/7',
+      address: '123 Main St',
+      location: currentLocation ? 
+        { lat: currentLocation.lat + 0.002, lng: currentLocation.lng + 0.001 } : undefined
+    },
+    {
+      id: 'mock2',
+      name: 'Street Parking - Oak Ave',
+      type: 'street',
+      distance: '0.1 mi',
+      walkTime: '2 min',
+      price: '$2/hr',
+      availability: 45,
+      rating: 4.0,
+      features: ['Metered', '2hr Max'],
+      hours: '8AM-6PM',
+      address: 'Oak Ave',
+      location: currentLocation ?
+        { lat: currentLocation.lat + 0.001, lng: currentLocation.lng } : undefined
+    },
+    {
+      id: 'mock3',
+      name: 'Park & Ride Lot',
+      type: 'lot',
+      distance: '0.5 mi',
+      walkTime: '7 min',
+      price: '$10/day',
+      availability: 92,
+      rating: 4.3,
+      features: ['Shuttle Service', 'Security'],
+      hours: '5AM-12AM',
+      address: '456 Park Rd',
+      location: currentLocation ?
+        { lat: currentLocation.lat - 0.003, lng: currentLocation.lng + 0.002 } : undefined
+    }
+  ];
 
   const getAvailabilityColor = (availability: number) => {
     if (availability > 70) return 'text-green-600';
@@ -143,6 +306,39 @@ export function ParkingFinder({ onBack, destination }: ParkingFinderProps) {
     setShowPayment(true);
   };
 
+  const handleNavigateToSpot = (spot: ParkingSpot) => {
+    if (spot.location) {
+      // Set the parking spot as destination
+      setSelectedLocation({
+        lat: spot.location.lat,
+        lng: spot.location.lng,
+        name: spot.name,
+        address: spot.address
+      });
+      
+      // Trigger route calculation
+      if (currentLocation) {
+        calculateRoute(currentLocation, {
+          lat: spot.location.lat,
+          lng: spot.location.lng,
+          name: spot.name,
+          address: spot.address
+        }, 'driving');
+      }
+      
+      toast.success(`Navigation started to ${spot.name}`);
+      logger.info('Navigation started to parking spot', { spot });
+      
+      // Call parent navigation handler if provided
+      if (onNavigateToParking) {
+        onNavigateToParking(spot);
+      }
+    } else {
+      // Fallback to external maps
+      window.location.href = `https://maps.google.com/?q=${encodeURIComponent(spot.address)}`;
+    }
+  };
+
   return (
     <div className="h-full bg-gray-50 flex flex-col">
       {/* Header */}
@@ -152,8 +348,17 @@ export function ParkingFinder({ onBack, destination }: ParkingFinderProps) {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div className="flex-1">
-            <h2 className="font-semibold text-gray-900">Find Parking</h2>
-            <p className="text-sm text-gray-500">Near your destination</p>
+            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+              Find Parking
+              {!isShowingRealData && (
+                <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">
+                  Demo Data
+                </Badge>
+              )}
+            </h2>
+            <p className="text-sm text-gray-500">
+              {isShowingRealData ? 'Live parking data from Google Places' : 'Sample parking data for your area'}
+            </p>
           </div>
           <Button variant="outline" size="icon">
             <Filter className="w-4 h-4" />
@@ -279,13 +484,7 @@ export function ParkingFinder({ onBack, destination }: ParkingFinderProps) {
                   <Button 
                     className="flex-1" 
                     variant="outline"
-                    onClick={() => {
-                      // Start navigation to the selected parking spot
-                      window.location.href = `https://maps.apple.com/?daddr=${encodeURIComponent(spot.address)}`;
-                      // Alternative for Android: window.location.href = `geo:0,0?q=${encodeURIComponent(spot.address)}`;
-                      logger.info(`Navigation started to parking spot: ${spot.name}`);
-                      toast.success(`Starting navigation to ${spot.name}`);
-                    }}
+                    onClick={() => handleNavigateToSpot(spot)}
                   >
                     <Navigation className="w-4 h-4 mr-1" />
                     Navigate

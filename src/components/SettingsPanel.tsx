@@ -32,11 +32,10 @@ import { Slider } from './ui/slider';
 import { Badge } from './ui/badge';
 import { useUser } from '../contexts/UserContext';
 import { logger } from '../utils/logger';
-import { toast } from 'sonner';
+import { ThemeToggle } from './ThemeToggle';
 
 interface SettingsPanelProps {
   onBack: () => void;
-  onNavigateToOffline?: () => void;
   onNavigateToIntegrations?: () => void;
   onNavigateToFleet?: () => void;
   onNavigateToAPIDocs?: () => void;
@@ -47,7 +46,7 @@ interface SettingsPanelProps {
   onNavigateToCrashReports?: () => void;
 }
 
-export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegrations, onNavigateToFleet, onNavigateToAPIDocs, onNavigateToORSConfig, onNavigateToDeveloper, onNavigateToPushSettings, onNavigateToDeviceTest, onNavigateToCrashReports }: SettingsPanelProps) {
+export function SettingsPanel({ onBack, onNavigateToIntegrations, onNavigateToFleet, onNavigateToAPIDocs, onNavigateToORSConfig, onNavigateToDeveloper, onNavigateToPushSettings, onNavigateToDeviceTest, onNavigateToCrashReports }: SettingsPanelProps) {
   const { preferences, updatePreference, updatePreferences } = useUser();
   const [currentView, setCurrentView] = useState<'main' | 'voice' | 'accessibility'>('main');
   
@@ -126,7 +125,6 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
       items: [
         { id: 'privacy', icon: Shield, label: 'Privacy Settings', description: 'Location history and data usage' },
         { id: 'push-settings', icon: Bell, label: 'Push Notifications', description: 'Configure app notifications and alerts', onClick: onNavigateToPushSettings },
-        { id: 'offline', icon: Download, label: 'Offline Maps', description: 'Download maps for offline use', onClick: onNavigateToOffline },
       ]
     },
     {
@@ -140,6 +138,7 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
       title: 'Integrations',
       items: [
         { id: 'connected', icon: Settings, label: 'Connected Services', description: 'Manage app integrations', onClick: onNavigateToIntegrations },
+        { id: 'experiments', icon: Settings, label: 'Experiment Management', description: 'Feature flags and A/B testing', onClick: onNavigateToDeveloper },
         { id: 'ors-config', icon: Settings, label: 'OpenRouteService API', description: 'Configure live navigation APIs', onClick: onNavigateToORSConfig },
         { id: 'developer', icon: Settings, label: 'Developer Tools', description: 'Debugging and diagnostics', onClick: onNavigateToDeveloper },
       ]
@@ -154,11 +153,6 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
   ];
 
   const quickSettings = [
-    { id: 'dark-mode', label: 'Dark Mode', value: darkMode, onChange: (value: boolean) => {
-      updatePreference('darkMode', value);
-      logger.debug('Dark mode preference updated', { value });
-      toast.success(`Dark mode ${value ? 'enabled' : 'disabled'}`);
-    }},
     { id: 'voice', label: 'Voice Guidance', value: voiceGuidance, onChange: (value: boolean) => {
       updatePreference('voiceGuidance', value);
       logger.debug('Voice guidance preference updated', { value });
@@ -609,7 +603,7 @@ export function SettingsPanel({ onBack, onNavigateToOffline, onNavigateToIntegra
                         <div className="font-medium text-gray-900">{item.label}</div>
                         <div className="text-sm text-gray-500">{item.description}</div>
                       </div>
-                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                      {item.id === 'appearance' ? <ThemeToggle /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
                     </button>
                     {index < section.items.length - 1 && (
                       <Separator className="ml-18" />

@@ -4,74 +4,43 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.userRateLimit = exports.validateApiKey = exports.checkResourceOwnership = exports.authorize = exports.optionalAuthenticate = exports.authenticate = void 0;
-const database_1 = require("@/config/database");
 const auth_1 = require("@/utils/auth");
 const types_1 = require("@/types");
 const logger_1 = __importDefault(require("@/config/logger"));
+const guestUser = {
+    id: 'guest',
+    email: 'guest@example.com',
+    firstName: 'Guest',
+    lastName: 'User',
+    role: 'USER',
+    isVerified: true,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    preferences: {
+        id: 'guest-prefs',
+        userId: 'guest',
+        defaultTransportMode: 'DRIVING',
+        units: 'metric',
+        language: 'en',
+        shareLocation: false,
+        shareActivity: true,
+        allowFriendRequests: true,
+        trafficAlerts: true,
+        weatherAlerts: true,
+        socialNotifications: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    }
+};
 const authenticate = async (req, res, next) => {
-    try {
-        const token = (0, auth_1.extractTokenFromHeader)(req.headers.authorization);
-        if (!token) {
-            throw new types_1.AppError('Access token is required', types_1.HttpStatus.UNAUTHORIZED);
-        }
-        const payload = (0, auth_1.verifyAccessToken)(token);
-        const prisma = (0, database_1.getPrismaClient)();
-        const user = await prisma.user.findUnique({
-            where: {
-                id: payload.userId,
-                isActive: true,
-            },
-            include: {
-                preferences: true,
-            },
-        });
-        if (!user) {
-            throw new types_1.AppError('User not found or inactive', types_1.HttpStatus.UNAUTHORIZED);
-        }
-        if (!user.isVerified) {
-            throw new types_1.AppError('Email verification required', types_1.HttpStatus.FORBIDDEN);
-        }
-        req.user = user;
-        logger_1.default.debug('User authenticated successfully', {
-            userId: user.id,
-            email: user.email
-        });
-        next();
-    }
-    catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        logger_1.default.error('Authentication failed', { error: message });
-        next(error);
-    }
+    req.user = guestUser;
+    next();
 };
 exports.authenticate = authenticate;
 const optionalAuthenticate = async (req, res, next) => {
-    try {
-        const token = (0, auth_1.extractTokenFromHeader)(req.headers.authorization);
-        if (!token) {
-            return next();
-        }
-        const payload = (0, auth_1.verifyAccessToken)(token);
-        const prisma = (0, database_1.getPrismaClient)();
-        const user = await prisma.user.findUnique({
-            where: {
-                id: payload.userId,
-                isActive: true,
-            },
-            include: {
-                preferences: true,
-            },
-        });
-        if (user && user.isVerified) {
-            req.user = user;
-        }
-        next();
-    }
-    catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        logger_1.default.debug('Optional authentication failed', { error: message });
-        next();
-    }
+    req.user = guestUser;
+    next();
 };
 exports.optionalAuthenticate = optionalAuthenticate;
 const authorize = (requiredRole = 'USER') => {

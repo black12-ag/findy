@@ -1,4 +1,5 @@
-import { Request, Response } from 'express';
+import { AuthenticatedRequest } from '@/types';
+import { Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/error';
@@ -26,28 +27,15 @@ const updateProfileSchema = z.object({
 });
 
 const updatePreferencesSchema = z.object({
-  defaultTravelMode: z.enum(['DRIVING', 'WALKING', 'BICYCLING', 'TRANSIT']).optional(),
-  units: z.enum(['METRIC', 'IMPERIAL']).optional(),
+  defaultTransportMode: z.enum(['DRIVING', 'WALKING', 'BICYCLING', 'TRANSIT']).optional(),
+  units: z.enum(['metric', 'imperial']).optional(),
   language: z.string().min(2).max(5).optional(),
-  theme: z.enum(['LIGHT', 'DARK', 'SYSTEM']).optional(),
-  notifications: z.object({
-    email: z.boolean().optional(),
-    push: z.boolean().optional(),
-    sms: z.boolean().optional(),
-    marketing: z.boolean().optional(),
-  }).optional(),
-  privacy: z.object({
-    shareLocation: z.boolean().optional(),
-    showOnlineStatus: z.boolean().optional(),
-    allowFriendRequests: z.boolean().optional(),
-    shareTrips: z.boolean().optional(),
-  }).optional(),
-  mapSettings: z.object({
-    showTraffic: z.boolean().optional(),
-    showSatellite: z.boolean().optional(),
-    autoRecenter: z.boolean().optional(),
-    voiceNavigation: z.boolean().optional(),
-  }).optional(),
+  shareLocation: z.boolean().optional(),
+  shareActivity: z.boolean().optional(),
+  allowFriendRequests: z.boolean().optional(),
+  trafficAlerts: z.boolean().optional(),
+  weatherAlerts: z.boolean().optional(),
+  socialNotifications: z.boolean().optional(),
 });
 
 const changePasswordSchema = z.object({
@@ -67,7 +55,7 @@ const deleteAccountSchema = z.object({
  * Get user profile
  */
 export const getUserProfile = async (
-  req: Request,
+  req: AuthenticatedRequest,
   res: Response<UserProfileResponse>
 ): Promise<void> => {
   try {
@@ -78,20 +66,20 @@ export const getUserProfile = async (
       select: {
         id: true,
         email: true,
+        username: true,
         firstName: true,
         lastName: true,
-        phone: true,
-        dateOfBirth: true,
-        bio: true,
         avatar: true,
-        emailVerified: true,
+        phoneNumber: true,
+        isVerified: true,
+        role: true,
         createdAt: true,
         updatedAt: true,
         _count: {
           select: {
-            routes: true,
+            routeHistory: true,
             places: true,
-            friends: true,
+            friendships: true,
           },
         },
       },
@@ -104,14 +92,10 @@ export const getUserProfile = async (
     res.status(200).json({
       success: true,
       data: {
-        user: {
-          ...user,
-          stats: {
-            routesCount: user._count.routes,
-            placesCount: user._count.places,
-            friendsCount: user._count.friends,
-          },
-        },
+        ...user,
+        routesCount: user._count.routeHistory,
+        placesCount: user._count.places,
+        friendsCount: user._count.friendships,
       },
     });
   } catch (error) {
@@ -124,11 +108,11 @@ export const getUserProfile = async (
  * Update user profile
  */
 export const updateProfile = async (
-  req: Request<{}, UserProfileResponse, UpdateProfileRequest>,
+  req: AuthenticatedRequest,
   res: Response<UserProfileResponse>
 ): Promise<void> => {
   try {
-    const { firstName, lastName, phone, dateOfBirth, bio, avatar } = 
+    const { firstName, lastName, phone, dateOfBirth, bio, avatar } =
       updateProfileSchema.parse(req.body);
     const userId = req.user!.id;
 
@@ -141,7 +125,7 @@ export const updateProfile = async (
     if (phone) {
       const existingUser = await prisma.user.findFirst({
         where: {
-          phone,
+          phoneNumber: phone,
           id: { not: userId },
         },
       });
@@ -157,28 +141,25 @@ export const updateProfile = async (
       data: {
         ...(firstName && { firstName: sanitizeInput(firstName) }),
         ...(lastName && { lastName: sanitizeInput(lastName) }),
-        ...(phone && { phone: sanitizeInput(phone) }),
-        ...(dateOfBirth && { dateOfBirth: new Date(dateOfBirth) }),
-        ...(bio && { bio: sanitizeInput(bio) }),
-        ...(avatar && { avatar: sanitizeInput(avatar) }),
+        ...(phone && { phoneNumber: sanitizeInput(phone) }),
       },
       select: {
         id: true,
         email: true,
+        username: true,
         firstName: true,
         lastName: true,
-        phone: true,
-        dateOfBirth: true,
-        bio: true,
         avatar: true,
-        emailVerified: true,
+        phoneNumber: true,
+        isVerified: true,
+        role: true,
         createdAt: true,
         updatedAt: true,
         _count: {
           select: {
-            routes: true,
+            routeHistory: true,
             places: true,
-            friends: true,
+            friendships: true,
           },
         },
       },
@@ -196,14 +177,10 @@ export const updateProfile = async (
     res.status(200).json({
       success: true,
       data: {
-        user: {
-          ...updatedUser,
-          stats: {
-            routesCount: updatedUser._count.routes,
-            placesCount: updatedUser._count.places,
-            friendsCount: updatedUser._count.friends,
-          },
-        },
+        ...updatedUser,
+        routesCount: updatedUser._count.routeHistory,
+        placesCount: updatedUser._count.places,
+        friendsCount: updatedUser._count.friendships,
       },
     });
   } catch (error) {
@@ -216,7 +193,7 @@ export const updateProfile = async (
  * Get user preferences
  */
 export const getUserPreferences = async (
-  req: Request,
+  req: AuthenticatedRequest,
   res: Response<UserPreferencesResponse>
 ): Promise<void> => {
   try {
@@ -231,56 +208,30 @@ export const getUserPreferences = async (
       const defaultPreferences = await prisma.userPreferences.create({
         data: {
           userId,
-          defaultTravelMode: 'DRIVING',
-          units: 'METRIC',
+          defaultTransportMode: 'DRIVING',
+          units: 'metric',
           language: 'en',
-          theme: 'SYSTEM',
-          notifications: JSON.stringify({
-            email: true,
-            push: true,
-            sms: false,
-            marketing: false,
-          }),
-          privacy: JSON.stringify({
-            shareLocation: false,
-            showOnlineStatus: true,
-            allowFriendRequests: true,
-            shareTrips: false,
-          }),
-          mapSettings: JSON.stringify({
-            showTraffic: true,
-            showSatellite: false,
-            autoRecenter: true,
-            voiceNavigation: true,
-          }),
+          shareLocation: false,
+          shareActivity: true,
+          allowFriendRequests: true,
+          trafficAlerts: true,
+          weatherAlerts: true,
+          socialNotifications: true,
         },
       });
 
       res.status(200).json({
         success: true,
-        data: {
-          preferences: {
-            ...defaultPreferences,
-            notifications: JSON.parse(defaultPreferences.notifications as string),
-            privacy: JSON.parse(defaultPreferences.privacy as string),
-            mapSettings: JSON.parse(defaultPreferences.mapSettings as string),
-          },
-        },
+        data: defaultPreferences as any,
       });
     } else {
       res.status(200).json({
         success: true,
-        data: {
-          preferences: {
-            ...preferences,
-            notifications: JSON.parse(preferences.notifications as string),
-            privacy: JSON.parse(preferences.privacy as string),
-            mapSettings: JSON.parse(preferences.mapSettings as string),
-          },
-        },
+        data: preferences as any,
       });
     }
-  } catch (error) {
+  }
+  catch (error) {
     logger.error('Error getting user preferences:', error);
     throw new AppError('Failed to get user preferences', 500);
   }
@@ -290,7 +241,7 @@ export const getUserPreferences = async (
  * Update user preferences
  */
 export const updatePreferences = async (
-  req: Request<{}, UserPreferencesResponse, UpdatePreferencesRequest>,
+  req: AuthenticatedRequest,
   res: Response<UserPreferencesResponse>
 ): Promise<void> => {
   try {
@@ -302,46 +253,11 @@ export const updatePreferences = async (
       fields: Object.keys(req.body),
     });
 
-    // Get current preferences
-    const currentPreferences = await prisma.userPreferences.findUnique({
-      where: { userId },
-    });
-
-    if (!currentPreferences) {
-      throw new AppError('User preferences not found', 404);
-    }
-
-    // Parse current JSON fields
-    const currentNotifications = JSON.parse(currentPreferences.notifications as string);
-    const currentPrivacy = JSON.parse(currentPreferences.privacy as string);
-    const currentMapSettings = JSON.parse(currentPreferences.mapSettings as string);
-
     // Update preferences
     const updatedPreferences = await prisma.userPreferences.update({
       where: { userId },
       data: {
-        ...(validatedData.defaultTravelMode && { defaultTravelMode: validatedData.defaultTravelMode }),
-        ...(validatedData.units && { units: validatedData.units }),
-        ...(validatedData.language && { language: validatedData.language }),
-        ...(validatedData.theme && { theme: validatedData.theme }),
-        ...(validatedData.notifications && {
-          notifications: JSON.stringify({
-            ...currentNotifications,
-            ...validatedData.notifications,
-          }),
-        }),
-        ...(validatedData.privacy && {
-          privacy: JSON.stringify({
-            ...currentPrivacy,
-            ...validatedData.privacy,
-          }),
-        }),
-        ...(validatedData.mapSettings && {
-          mapSettings: JSON.stringify({
-            ...currentMapSettings,
-            ...validatedData.mapSettings,
-          }),
-        }),
+        ...validatedData,
       },
     });
 
@@ -356,14 +272,7 @@ export const updatePreferences = async (
 
     res.status(200).json({
       success: true,
-      data: {
-        preferences: {
-          ...updatedPreferences,
-          notifications: JSON.parse(updatedPreferences.notifications as string),
-          privacy: JSON.parse(updatedPreferences.privacy as string),
-          mapSettings: JSON.parse(updatedPreferences.mapSettings as string),
-        },
-      },
+      data: updatedPreferences as any,
     });
   } catch (error) {
     logger.error('Error updating user preferences:', error);
@@ -375,7 +284,7 @@ export const updatePreferences = async (
  * Change user password
  */
 export const changePassword = async (
-  req: Request<{}, {}, ChangePasswordRequest>,
+  req: AuthenticatedRequest,
   res: Response
 ): Promise<void> => {
   try {
@@ -438,7 +347,7 @@ export const changePassword = async (
  * Get user analytics
  */
 export const getUserAnalytics = async (
-  req: Request<{}, UserAnalyticsResponse, {}, { days?: string }>,
+  req: AuthenticatedRequest,
   res: Response<UserAnalyticsResponse>
 ): Promise<void> => {
   try {
@@ -470,7 +379,7 @@ export const getUserAnalytics = async (
  * Delete user account
  */
 export const deleteAccount = async (
-  req: Request<{}, {}, DeleteAccountRequest>,
+  req: AuthenticatedRequest,
   res: Response
 ): Promise<void> => {
   try {

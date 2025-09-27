@@ -1,0 +1,173 @@
+/* Global Fixes for Scrolling and Layout */
+
+/* Fix for all panels to ensure proper scrolling */
+.panel-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  flex-shrink: 0;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  z-index: 10;
+}
+
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure all h-full containers actually work */
+.h-full {
+  height: 100% !important;
+}
+
+/* Fix for nested scrollable containers */
+.overflow-auto {
+  overflow: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+.overflow-y-auto {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent body scroll when modal/sheet is open */
+body.no-scroll {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+}
+
+/* Ensure buttons are always clickable */
+button {
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Fix for mobile safe areas */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.safe-area-pt {
+  padding-top: env(safe-area-inset-top, 0);
+}
+
+/* Ensure all interactive elements are visible */
+.z-40 {
+  z-index: 40 !important;
+}
+
+.z-50 {
+  z-index: 50 !important;
+}
+
+/* Fix for absolute positioned elements */
+.absolute {
+  position: absolute !important;
+}
+
+/* Ensure proper flex layout */
+.flex {
+  display: flex !important;
+}
+
+.flex-col {
+  flex-direction: column !important;
+}
+
+.flex-1 {
+  flex: 1 1 0% !important;
+}
+
+.flex-shrink-0 {
+  flex-shrink: 0 !important;
+}
+
+/* Fix for visibility issues */
+.hidden {
+  display: none !important;
+}
+
+.visible {
+  visibility: visible !important;
+}
+
+/* Ensure proper min-height for content areas */
+.min-h-0 {
+  min-height: 0 !important;
+}
+
+/* Fix for iOS bounce scrolling */
+.ios-scroll-fix {
+  -webkit-overflow-scrolling: touch;
+  overflow-y: scroll;
+}
+
+/* Prevent text selection on buttons */
+.select-none {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/* Ensure dialogs and sheets are properly positioned */
+.fixed {
+  position: fixed !important;
+}
+
+.inset-0 {
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+}
+
+/* Improve touch targets for mobile */
+@media (max-width: 768px) {
+  button, 
+  a, 
+  [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  .text-sm {
+    font-size: 14px !important;
+  }
+}
+
+/* MapLibre controls compact overrides: remove extra white space and ensure tight layout */
+.maplibregl-ctrl-group {
+  width: auto !important;
+  padding: 2px !important; /* minimal inner padding */
+  gap: 2px !important;     /* small gap between buttons */
+  display: inline-flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+/* Ensure zoom buttons are compact and not affected by global min sizes */
+.maplibregl-ctrl-group button {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 32px !important;
+  height: 32px !important;
+  line-height: 32px !important;
+}
+
+/* Undo mobile min-size overrides specifically for map controls */
+@media (max-width: 768px) {
+  .maplibregl-ctrl-group button {
+    min-width: 32px !important;
+    min-height: 32px !important;
+  }
+}

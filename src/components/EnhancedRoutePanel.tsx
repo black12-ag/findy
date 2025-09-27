@@ -24,7 +24,7 @@ import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { routesService } from '../services/routes';
-import { ORSDirectionsService, setORSApiKey } from '../services/openRouteService';
+import { ORSDirectionsService, setORSApiKey } from '../services/googleUnifiedService';
 import { logger } from '../utils/logger';
 import { toast } from 'sonner';
 

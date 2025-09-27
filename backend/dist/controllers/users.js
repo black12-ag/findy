@@ -49,28 +49,15 @@ const updateProfileSchema = zod_1.z.object({
     avatar: zod_1.z.string().url().optional(),
 });
 const updatePreferencesSchema = zod_1.z.object({
-    defaultTravelMode: zod_1.z.enum(['DRIVING', 'WALKING', 'BICYCLING', 'TRANSIT']).optional(),
-    units: zod_1.z.enum(['METRIC', 'IMPERIAL']).optional(),
+    defaultTransportMode: zod_1.z.enum(['DRIVING', 'WALKING', 'BICYCLING', 'TRANSIT']).optional(),
+    units: zod_1.z.enum(['metric', 'imperial']).optional(),
     language: zod_1.z.string().min(2).max(5).optional(),
-    theme: zod_1.z.enum(['LIGHT', 'DARK', 'SYSTEM']).optional(),
-    notifications: zod_1.z.object({
-        email: zod_1.z.boolean().optional(),
-        push: zod_1.z.boolean().optional(),
-        sms: zod_1.z.boolean().optional(),
-        marketing: zod_1.z.boolean().optional(),
-    }).optional(),
-    privacy: zod_1.z.object({
-        shareLocation: zod_1.z.boolean().optional(),
-        showOnlineStatus: zod_1.z.boolean().optional(),
-        allowFriendRequests: zod_1.z.boolean().optional(),
-        shareTrips: zod_1.z.boolean().optional(),
-    }).optional(),
-    mapSettings: zod_1.z.object({
-        showTraffic: zod_1.z.boolean().optional(),
-        showSatellite: zod_1.z.boolean().optional(),
-        autoRecenter: zod_1.z.boolean().optional(),
-        voiceNavigation: zod_1.z.boolean().optional(),
-    }).optional(),
+    shareLocation: zod_1.z.boolean().optional(),
+    shareActivity: zod_1.z.boolean().optional(),
+    allowFriendRequests: zod_1.z.boolean().optional(),
+    trafficAlerts: zod_1.z.boolean().optional(),
+    weatherAlerts: zod_1.z.boolean().optional(),
+    socialNotifications: zod_1.z.boolean().optional(),
 });
 const changePasswordSchema = zod_1.z.object({
     currentPassword: zod_1.z.string().min(1),
@@ -90,20 +77,20 @@ const getUserProfile = async (req, res) => {
             select: {
                 id: true,
                 email: true,
+                username: true,
                 firstName: true,
                 lastName: true,
-                phone: true,
-                dateOfBirth: true,
-                bio: true,
                 avatar: true,
-                emailVerified: true,
+                phoneNumber: true,
+                isVerified: true,
+                role: true,
                 createdAt: true,
                 updatedAt: true,
                 _count: {
                     select: {
-                        routes: true,
+                        routeHistory: true,
                         places: true,
-                        friends: true,
+                        friendships: true,
                     },
                 },
             },
@@ -114,14 +101,10 @@ const getUserProfile = async (req, res) => {
         res.status(200).json({
             success: true,
             data: {
-                user: {
-                    ...user,
-                    stats: {
-                        routesCount: user._count.routes,
-                        placesCount: user._count.places,
-                        friendsCount: user._count.friends,
-                    },
-                },
+                ...user,
+                routesCount: user._count.routeHistory,
+                placesCount: user._count.places,
+                friendsCount: user._count.friendships,
             },
         });
     }
@@ -142,7 +125,7 @@ const updateProfile = async (req, res) => {
         if (phone) {
             const existingUser = await database_1.prisma.user.findFirst({
                 where: {
-                    phone,
+                    phoneNumber: phone,
                     id: { not: userId },
                 },
             });
@@ -155,28 +138,25 @@ const updateProfile = async (req, res) => {
             data: {
                 ...(firstName && { firstName: (0, security_1.sanitizeInput)(firstName) }),
                 ...(lastName && { lastName: (0, security_1.sanitizeInput)(lastName) }),
-                ...(phone && { phone: (0, security_1.sanitizeInput)(phone) }),
-                ...(dateOfBirth && { dateOfBirth: new Date(dateOfBirth) }),
-                ...(bio && { bio: (0, security_1.sanitizeInput)(bio) }),
-                ...(avatar && { avatar: (0, security_1.sanitizeInput)(avatar) }),
+                ...(phone && { phoneNumber: (0, security_1.sanitizeInput)(phone) }),
             },
             select: {
                 id: true,
                 email: true,
+                username: true,
                 firstName: true,
                 lastName: true,
-                phone: true,
-                dateOfBirth: true,
-                bio: true,
                 avatar: true,
-                emailVerified: true,
+                phoneNumber: true,
+                isVerified: true,
+                role: true,
                 createdAt: true,
                 updatedAt: true,
                 _count: {
                     select: {
-                        routes: true,
+                        routeHistory: true,
                         places: true,
-                        friends: true,
+                        friendships: true,
                     },
                 },
             },
@@ -191,14 +171,10 @@ const updateProfile = async (req, res) => {
         res.status(200).json({
             success: true,
             data: {
-                user: {
-                    ...updatedUser,
-                    stats: {
-                        routesCount: updatedUser._count.routes,
-                        placesCount: updatedUser._count.places,
-                        friendsCount: updatedUser._count.friends,
-                    },
-                },
+                ...updatedUser,
+                routesCount: updatedUser._count.routeHistory,
+                placesCount: updatedUser._count.places,
+                friendsCount: updatedUser._count.friendships,
             },
         });
     }
@@ -218,53 +194,26 @@ const getUserPreferences = async (req, res) => {
             const defaultPreferences = await database_1.prisma.userPreferences.create({
                 data: {
                     userId,
-                    defaultTravelMode: 'DRIVING',
-                    units: 'METRIC',
+                    defaultTransportMode: 'DRIVING',
+                    units: 'metric',
                     language: 'en',
-                    theme: 'SYSTEM',
-                    notifications: JSON.stringify({
-                        email: true,
-                        push: true,
-                        sms: false,
-                        marketing: false,
-                    }),
-                    privacy: JSON.stringify({
-                        shareLocation: false,
-                        showOnlineStatus: true,
-                        allowFriendRequests: true,
-                        shareTrips: false,
-                    }),
-                    mapSettings: JSON.stringify({
-                        showTraffic: true,
-                        showSatellite: false,
-                        autoRecenter: true,
-                        voiceNavigation: true,
-                    }),
+                    shareLocation: false,
+                    shareActivity: true,
+                    allowFriendRequests: true,
+                    trafficAlerts: true,
+                    weatherAlerts: true,
+                    socialNotifications: true,
                 },
             });
             res.status(200).json({
                 success: true,
-                data: {
-                    preferences: {
-                        ...defaultPreferences,
-                        notifications: JSON.parse(defaultPreferences.notifications),
-                        privacy: JSON.parse(defaultPreferences.privacy),
-                        mapSettings: JSON.parse(defaultPreferences.mapSettings),
-                    },
-                },
+                data: defaultPreferences,
             });
         }
         else {
             res.status(200).json({
                 success: true,
-                data: {
-                    preferences: {
-                        ...preferences,
-                        notifications: JSON.parse(preferences.notifications),
-                        privacy: JSON.parse(preferences.privacy),
-                        mapSettings: JSON.parse(preferences.mapSettings),
-                    },
-                },
+                data: preferences,
             });
         }
     }
@@ -282,40 +231,10 @@ const updatePreferences = async (req, res) => {
             userId,
             fields: Object.keys(req.body),
         });
-        const currentPreferences = await database_1.prisma.userPreferences.findUnique({
-            where: { userId },
-        });
-        if (!currentPreferences) {
-            throw new error_1.AppError('User preferences not found', 404);
-        }
-        const currentNotifications = JSON.parse(currentPreferences.notifications);
-        const currentPrivacy = JSON.parse(currentPreferences.privacy);
-        const currentMapSettings = JSON.parse(currentPreferences.mapSettings);
         const updatedPreferences = await database_1.prisma.userPreferences.update({
             where: { userId },
             data: {
-                ...(validatedData.defaultTravelMode && { defaultTravelMode: validatedData.defaultTravelMode }),
-                ...(validatedData.units && { units: validatedData.units }),
-                ...(validatedData.language && { language: validatedData.language }),
-                ...(validatedData.theme && { theme: validatedData.theme }),
-                ...(validatedData.notifications && {
-                    notifications: JSON.stringify({
-                        ...currentNotifications,
-                        ...validatedData.notifications,
-                    }),
-                }),
-                ...(validatedData.privacy && {
-                    privacy: JSON.stringify({
-                        ...currentPrivacy,
-                        ...validatedData.privacy,
-                    }),
-                }),
-                ...(validatedData.mapSettings && {
-                    mapSettings: JSON.stringify({
-                        ...currentMapSettings,
-                        ...validatedData.mapSettings,
-                    }),
-                }),
+                ...validatedData,
             },
         });
         await analytics_simple_1.analyticsService.trackEvent({
@@ -327,14 +246,7 @@ const updatePreferences = async (req, res) => {
         });
         res.status(200).json({
             success: true,
-            data: {
-                preferences: {
-                    ...updatedPreferences,
-                    notifications: JSON.parse(updatedPreferences.notifications),
-                    privacy: JSON.parse(updatedPreferences.privacy),
-                    mapSettings: JSON.parse(updatedPreferences.mapSettings),
-                },
-            },
+            data: updatedPreferences,
         });
     }
     catch (error) {

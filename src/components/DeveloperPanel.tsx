@@ -11,6 +11,9 @@ import ErrorTestComponent from './ErrorTestComponent';
 import PushNotificationSettings from './PushNotificationSettings';
 import { logger } from '../utils/logger';
 import { toast } from 'sonner';
+import ExperimentManagement from './ExperimentManagement';
+import { Agent2ServiceIntegrationTest } from './Agent2ServiceIntegrationTest';
+import { RoutePanel } from './RoutePanel';
 
 interface DeveloperPanelProps {
   onBack: () => void;
@@ -128,7 +131,7 @@ export const DeveloperPanel: React.FC<DeveloperPanelProps> = ({ onBack }) => {
           </Card>
         ) : (
           <Tabs defaultValue="crash-reports" className="w-full">
-            <TabsList className="grid w-full grid-cols-5">
+<TabsList className="grid w-full grid-cols-8">
               <TabsTrigger value="crash-reports" className="flex items-center gap-1">
                 <Bug className="w-4 h-4" />
                 Crashes
@@ -148,6 +151,18 @@ export const DeveloperPanel: React.FC<DeveloperPanelProps> = ({ onBack }) => {
               <TabsTrigger value="system" className="flex items-center gap-1">
                 <Database className="w-4 h-4" />
                 System
+              </TabsTrigger>
+              <TabsTrigger value="experiments" className="flex items-center gap-1">
+                <TestTube className="w-4 h-4" />
+                Experiments
+              </TabsTrigger>
+              <TabsTrigger value="integration-tests" className="flex items-center gap-1">
+                <Wifi className="w-4 h-4" />
+                Integrations
+              </TabsTrigger>
+              <TabsTrigger value="legacy-ui" className="flex items-center gap-1">
+                <AlertTriangle className="w-4 h-4" />
+                Legacy UI
               </TabsTrigger>
             </TabsList>
 
@@ -262,8 +277,29 @@ export const DeveloperPanel: React.FC<DeveloperPanelProps> = ({ onBack }) => {
                 </Card>
               </div>
             </TabsContent>
+
+            <TabsContent value="experiments" className="mt-4">
+              <ExperimentManagement />
+            </TabsContent>
+
+            <TabsContent value="integration-tests" className="mt-4">
+              <Agent2ServiceIntegrationTest />
+            </TabsContent>
+
+            <TabsContent value="legacy-ui" className="mt-4">
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold mb-4">Legacy Route Panel</h3>
+                <RoutePanel
+                  from={{ id: 'from', name: 'Demo Start', address: '1 Market St, San Francisco', lat: 37.7946, lng: -122.3950 }}
+                  to={{ id: 'to', name: 'Ferry Building', address: '1 Ferry Building, San Francisco', lat: 37.7955, lng: -122.3937 }}
+                  transportMode="driving"
+                  onBack={() => {}}
+                  onStartNavigation={() => {}}
+                />
+              </Card>
+            </TabsContent>
           </Tabs>
-        )}
+)}
       </div>
     </div>
   );

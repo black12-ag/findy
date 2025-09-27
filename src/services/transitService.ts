@@ -4,7 +4,7 @@
  * Provides real transit routing, schedules, and real-time information
  */
 
-import { ORSDirectionsService, ORSCoordinate } from './openRouteService';
+import { ORSDirectionsService, setORSApiKey } from './googleUnifiedService';
 import { geocodingService } from './geocodingService';
 
 export interface TransitStop {

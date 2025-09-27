@@ -178,14 +178,6 @@ export const NavigationMenu: React.FC<NavigationMenuProps> = ({
               </Button>
               <Button
                 variant="outline"
-                onClick={() => onNavigateToScreen('offline')}
-                className="h-auto p-3 flex-col"
-              >
-                <Route className="w-4 h-4 mb-1" />
-                <span className="text-xs">Offline Maps</span>
-              </Button>
-              <Button
-                variant="outline"
                 onClick={() => onNavigateToScreen('ar')}
                 className="h-auto p-3 flex-col"
               >

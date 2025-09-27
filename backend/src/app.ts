@@ -3,14 +3,11 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
-import passport from 'passport';
-import session from 'express-session';
 import { config } from '@/config/env';
 import { logger } from '@/config/logger';
 import { connectDatabase } from '@/config/database';
 import { connectRedis } from '@/config/redis';
 import { errorHandler, notFound } from '@/middleware/error';
-import { initializeOAuth } from '@/config/oauth';
 import { 
   initSentry as initializeSentry, 
   sentryRequestHandler, 
@@ -20,7 +17,6 @@ import {
 import { setupSwagger } from '@/config/swagger';
 
 // Import routes
-import authRoutes from '@/routes/auth';
 import placesRoutes from '@/routes/places';
 import routesRoutes from '@/routes/routes';
 import usersRoutes from '@/routes/users';
@@ -105,21 +101,7 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
-// Session middleware (required for OAuth)
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'pathfinder-session-secret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: config.node.env === 'production',
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-  },
-}));
-
-// Initialize Passport and OAuth
-app.use(passport.initialize());
-app.use(passport.session());
-initializeOAuth();
+// OAuth/authentication disabled for no-auth mode
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -146,8 +128,7 @@ app.get('/health', (_req, res) => {
   });
 });
 
-// API routes
-app.use('/api/v1/auth', authRoutes);
+// API routes (auth removed for no-auth mode)
 app.use('/api/v1/places', placesRoutes);
 app.use('/api/v1/routes', routesRoutes);
 app.use('/api/v1/users', usersRoutes);
@@ -163,7 +144,6 @@ app.get('/api/v1', (_req, res) => {
     version: '1.0.0',
     description: 'Navigation and location services API',
     endpoints: {
-      auth: '/api/v1/auth',
       places: '/api/v1/places',
       routes: '/api/v1/routes',
       users: '/api/v1/users',
