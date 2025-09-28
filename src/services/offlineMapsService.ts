@@ -66,45 +66,8 @@ class OfflineMapsService {
   constructor() {
     this.initializeDB();
     this.validateAPIKey();
-    this.ensureGoogleMapsLoaded();
-  }
-
-  /**
-   * Ensure Google Maps JavaScript API is loaded
-   */
-  private async ensureGoogleMapsLoaded(): Promise<void> {
-    if (this.googleMapsLoadPromise) {
-      return this.googleMapsLoadPromise;
-    }
-
-    this.googleMapsLoadPromise = new Promise<void>(async (resolve, reject) => {
-      try {
-        // Check if Google Maps is already loaded
-        if (typeof google !== 'undefined' && google.maps && google.maps.places) {
-          logger.info('Google Maps API already loaded');
-          resolve();
-          return;
-        }
-
-        // Import Google Maps Loader
-        const { Loader } = await import('@googlemaps/js-api-loader');
-        
-        const loader = new Loader({
-          apiKey: GOOGLE_MAPS_API_KEY,
-          version: 'weekly',
-          libraries: ['places', 'geometry', 'geocoding']
-        });
-
-        await loader.load();
-        logger.info('Google Maps API loaded successfully');
-        resolve();
-      } catch (error) {
-        logger.error('Failed to load Google Maps API:', error);
-        reject(error);
-      }
-    });
-
-    return this.googleMapsLoadPromise;
+    // Google Maps will be loaded by the centralized loader in App.tsx
+    // Individual services will check availability when needed
   }
 
   /**
@@ -112,8 +75,8 @@ class OfflineMapsService {
    */
   private async waitForGoogleMaps(): Promise<boolean> {
     try {
-      await this.ensureGoogleMapsLoaded();
-      return typeof google !== 'undefined' && !!google.maps && !!google.maps.places;
+      const { googleMapsLoader } = await import('./googleMapsLoader');
+      return await googleMapsLoader.waitForGoogleMaps();
     } catch (error) {
       logger.error('Google Maps API not available:', error);
       return false;

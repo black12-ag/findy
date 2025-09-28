@@ -5,7 +5,6 @@ import { useDeviceSensors } from '../services/deviceSensorsService';
 import { usePushNotifications } from '../services/pushNotificationService';
 import { useStorage } from '../services/storageService';
 import { useBackgroundLocation } from '../services/backgroundLocationService';
-import './DeviceIntegrationTest.css';
 
 interface TestResult {
   name: string;

@@ -7,12 +7,10 @@ import { Badge } from './ui/badge';
 import { Switch } from './ui/switch';
 import CrashReporting from './CrashReporting';
 import DeviceIntegrationTest from './DeviceIntegrationTest';
-import ErrorTestComponent from './ErrorTestComponent';
 import PushNotificationSettings from './PushNotificationSettings';
 import { logger } from '../utils/logger';
 import { toast } from 'sonner';
 import ExperimentManagement from './ExperimentManagement';
-import { Agent2ServiceIntegrationTest } from './Agent2ServiceIntegrationTest';
 import { RoutePanel } from './RoutePanel';
 
 interface DeveloperPanelProps {
@@ -193,7 +191,6 @@ export const DeveloperPanel: React.FC<DeveloperPanelProps> = ({ onBack }) => {
                       Trigger Error
                     </Button>
                   </div>
-                  <ErrorTestComponent />
                 </div>
               </Card>
             </TabsContent>
@@ -283,7 +280,10 @@ export const DeveloperPanel: React.FC<DeveloperPanelProps> = ({ onBack }) => {
             </TabsContent>
 
             <TabsContent value="integration-tests" className="mt-4">
-              <Agent2ServiceIntegrationTest />
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold mb-4">Integration Tests</h3>
+                <p className="text-gray-600">Integration test panel placeholder</p>
+              </Card>
             </TabsContent>
 
             <TabsContent value="legacy-ui" className="mt-4">

@@ -179,18 +179,19 @@ export function SettingsPanel({ onBack, onNavigateToIntegrations, onNavigateToFl
     return (
       <div className="h-full bg-gray-50 flex flex-col">
         {/* Header */}
-        <div className="flex-shrink-0 bg-white px-4 py-4 border-b border-gray-200">
-          <div className="flex items-center gap-3">
+        <div className="flex-shrink-0 bg-white px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-200">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setCurrentView('main')}
+              className="h-8 w-8 sm:h-10 sm:w-10"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
-            <div>
-              <h2 className="font-medium text-gray-900">Voice & Audio</h2>
-              <p className="text-sm text-gray-500">Configure voice guidance and sounds</p>
+            <div className="min-w-0">
+              <h2 className="font-medium text-gray-900 text-base sm:text-lg truncate">Voice & Audio</h2>
+              <p className="text-xs sm:text-sm text-gray-500 truncate">Configure voice guidance and sounds</p>
             </div>
           </div>
         </div>
@@ -534,45 +535,46 @@ export function SettingsPanel({ onBack, onNavigateToIntegrations, onNavigateToFl
   return (
     <div className="h-full bg-gray-50 flex flex-col">
       {/* Header */}
-      <div className="flex-shrink-0 bg-white px-4 py-4 border-b border-gray-200">
-        <div className="flex items-center gap-3">
+      <div className="flex-shrink-0 bg-white px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-200">
+        <div className="flex items-center gap-2 sm:gap-3">
           <Button
             variant="ghost"
             size="icon"
             onClick={onBack}
+            className="h-8 w-8 sm:h-10 sm:w-10"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           </Button>
-          <div>
-            <h2 className="font-medium text-gray-900">Settings</h2>
-            <p className="text-sm text-gray-500">Customize your experience</p>
+          <div className="min-w-0">
+            <h2 className="font-medium text-gray-900 text-base sm:text-lg truncate">Settings</h2>
+            <p className="text-xs sm:text-sm text-gray-500 truncate">Customize your experience</p>
           </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto scroll-y hide-scrollbar scroll-smooth">
         {/* Profile Section */}
-        <Card className="m-4 p-4">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white text-xl font-medium">
+        <Card className="m-3 sm:m-4 p-3 sm:p-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white text-lg sm:text-xl font-medium flex-shrink-0">
               JD
             </div>
-            <div className="flex-1">
-              <h3 className="font-medium text-gray-900">John Doe</h3>
-              <p className="text-sm text-gray-500">john.doe@example.com</p>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-medium text-gray-900 text-sm sm:text-base truncate">John Doe</h3>
+              <p className="text-xs sm:text-sm text-gray-500 truncate">john.doe@example.com</p>
               <p className="text-xs text-gray-400 mt-1">Member since Jan 2024</p>
             </div>
-            <ChevronRight className="w-5 h-5 text-gray-400" />
+            <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
           </div>
         </Card>
 
         {/* Quick Settings */}
-        <Card className="m-4 p-4">
-          <h3 className="font-medium text-gray-900 mb-4">Quick Settings</h3>
-          <div className="space-y-4">
+        <Card className="m-3 sm:m-4 p-3 sm:p-4">
+          <h3 className="font-medium text-gray-900 mb-3 sm:mb-4 text-sm sm:text-base">Quick Settings</h3>
+          <div className="space-y-3 sm:space-y-4">
             {quickSettings.map((setting) => (
               <div key={setting.id} className="flex items-center justify-between">
-                <span className="text-gray-700">{setting.label}</span>
+                <span className="text-gray-700 text-sm sm:text-base">{setting.label}</span>
                 <Switch
                   checked={setting.value}
                   onCheckedChange={setting.onChange}
@@ -584,32 +586,32 @@ export function SettingsPanel({ onBack, onNavigateToIntegrations, onNavigateToFl
 
         {/* Settings Sections */}
         {settingSections.map((section) => (
-          <div key={section.title} className="mb-6">
-            <div className="px-4 py-2">
-              <h3 className="font-medium text-gray-500 uppercase text-sm tracking-wide">
+          <div key={section.title} className="mb-4 sm:mb-6">
+            <div className="px-3 sm:px-4 py-1.5 sm:py-2">
+              <h3 className="font-medium text-gray-500 uppercase text-xs sm:text-sm tracking-wide">
                 {section.title}
               </h3>
             </div>
-            <Card className="mx-4">
+            <Card className="mx-3 sm:mx-4">
               {section.items.map((item, index) => {
                 const Icon = item.icon;
                 return (
                   <div key={item.id}>
                     <button 
-                      className="w-full p-4 flex items-center gap-4 hover:bg-gray-50 transition-colors"
+                      className="w-full p-3 sm:p-4 flex items-center gap-3 sm:gap-4 hover:bg-gray-50 transition-colors touch-manipulation"
                       onClick={item.onClick || (() => {})}
                     >
-                      <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                        <Icon className="w-5 h-5 text-gray-600" />
+                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
                       </div>
-                      <div className="flex-1 text-left">
-                        <div className="font-medium text-gray-900">{item.label}</div>
-                        <div className="text-sm text-gray-500">{item.description}</div>
+                      <div className="flex-1 text-left min-w-0">
+                        <div className="font-medium text-gray-900 text-sm sm:text-base truncate">{item.label}</div>
+                        <div className="text-xs sm:text-sm text-gray-500 line-clamp-2">{item.description}</div>
                       </div>
-                      {item.id === 'appearance' ? <ThemeToggle /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
+                      {item.id === 'appearance' ? <ThemeToggle /> : <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />}
                     </button>
                     {index < section.items.length - 1 && (
-                      <Separator className="ml-18" />
+                      <Separator className="ml-14 sm:ml-18" />
                     )}
                   </div>
                 );
@@ -619,24 +621,24 @@ export function SettingsPanel({ onBack, onNavigateToIntegrations, onNavigateToFl
         ))}
 
         {/* Help & Support */}
-        <Card className="m-4 p-4">
-          <h3 className="font-medium text-gray-900 mb-4">Help & Support</h3>
-          <div className="space-y-3">
-            <button className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
-              <HelpCircle className="w-5 h-5 text-gray-500" />
-              <span className="text-gray-700">Help Center</span>
-              <ChevronRight className="w-4 h-4 text-gray-400 ml-auto" />
+        <Card className="m-3 sm:m-4 p-3 sm:p-4">
+          <h3 className="font-medium text-gray-900 mb-3 sm:mb-4 text-sm sm:text-base">Help & Support</h3>
+          <div className="space-y-2 sm:space-y-3">
+            <button className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors touch-manipulation">
+              <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 flex-shrink-0" />
+              <span className="text-gray-700 text-sm sm:text-base">Help Center</span>
+              <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 ml-auto flex-shrink-0" />
             </button>
-            <button className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
-              <Settings className="w-5 h-5 text-gray-500" />
-              <span className="text-gray-700">Report a Problem</span>
-              <ChevronRight className="w-4 h-4 text-gray-400 ml-auto" />
+            <button className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors touch-manipulation">
+              <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 flex-shrink-0" />
+              <span className="text-gray-700 text-sm sm:text-base">Report a Problem</span>
+              <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 ml-auto flex-shrink-0" />
             </button>
           </div>
         </Card>
 
         {/* App Info */}
-        <div className="p-4 text-center text-sm text-gray-500">
+        <div className="p-3 sm:p-4 text-center text-xs sm:text-sm text-gray-500">
           <p>PathFinder Pro v2.1.0</p>
           <p>© 2024 PathFinder Technologies</p>
         </div>

@@ -21,7 +21,6 @@ import { Volume2, VolumeX, RefreshCw, Navigation2, AlertTriangle as Warning } fr
 import { geolocationService } from '../services/geolocationService';
 import { realtimeNavigationService, NavigationState, RouteDeviation } from '../services/realtimeNavigationService';
 import { DirectionalTransportIcon } from './DirectionalTransportIcon';
-import { OrientationTest } from './OrientationTest';
 
 interface Location {
   id: string;
@@ -121,7 +120,6 @@ export function GoogleMapView({
   const [wrongWayAlert, setWrongWayAlert] = useState<boolean>(false);
   const [routeDeviation, setRouteDeviation] = useState<RouteDeviation | null>(null);
   const [alternativeRoutes, setAlternativeRoutes] = useState<google.maps.DirectionsRoute[]>([]);
-  const [showOrientationTest, setShowOrientationTest] = useState(false);
   
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const trafficLayer = useRef<google.maps.TrafficLayer | null>(null);
@@ -2279,12 +2277,6 @@ export function GoogleMapView({
             });
           }
         }}
-      />
-      
-      {/* Orientation Test Modal */}
-      <OrientationTest 
-        isVisible={showOrientationTest}
-        onClose={() => setShowOrientationTest(false)}
       />
     </div>
   );

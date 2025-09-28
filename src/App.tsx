@@ -41,10 +41,12 @@ import AdvancedRouter, { usePageRouter, PageRoute } from './components/AdvancedR
 import { ImageWithFallback } from './components/figma/ImageWithFallback';
 import LoadingSpinner from './components/LoadingSpinner';
 import { NavigationMenu } from './components/NavigationMenu';
+import { NetflixHeader } from './components/NetflixHeader';
 import { Toaster } from './components/ui/sonner';
 import { ThemeToggle } from './components/ThemeToggle';
 import { logger } from './utils/logger';
 import googleMapsService from './services/googleMapsService';
+import { googleMapsLoader } from './services/googleMapsLoader';
 import { UserProvider } from './contexts/UserContext';
 import { NavigationProvider, useNavigation } from './contexts/NavigationContext';
 import { useUser } from './contexts/UserContext';
@@ -99,6 +101,22 @@ function AppContent() {
   useEffect(() => {
     const hasCompletedOnboarding = localStorage.getItem('pathfinder_onboarding_complete');
     setIsOnboardingComplete(!!hasCompletedOnboarding);
+  }, []);
+
+  // Initialize Google Maps API early to prevent loader conflicts
+  useEffect(() => {
+    const initializeGoogleMaps = async () => {
+      try {
+        logger.debug('Initializing Google Maps API...');
+        await googleMapsLoader.load();
+        logger.debug('Google Maps API initialized successfully');
+      } catch (error) {
+        logger.warn('Failed to initialize Google Maps API:', error);
+        // App continues to work, but some features may be limited
+      }
+    };
+
+    initializeGoogleMaps();
   }, []);
 
   const completeOnboarding = () => {
@@ -760,8 +778,8 @@ function AppContent() {
   return (
     <div className="h-screen w-full bg-background flex flex-col overflow-hidden">
       {/* Persistent Top Navigation Bar */}
-      <div className="flex-shrink-0 bg-white border-b border-gray-200 px-4 py-3 z-50">
-        <div className="flex items-center gap-3">
+      <div className="flex-shrink-0 bg-white border-b border-gray-200 px-3 sm:px-4 py-2 sm:py-3 z-50">
+        <div className="flex items-center gap-2 sm:gap-3">
           {/* Back button - show on all screens except map */}
           {currentScreen !== 'map' && (
             <Button
@@ -778,18 +796,18 @@ function AppContent() {
                   setCurrentScreen('map');
                 }
               }}
-              className="hover:bg-gray-100"
+              className="hover:bg-gray-100 h-8 w-8 sm:h-10 sm:w-10"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
           )}
           
           {/* Search Bar - show on map screen */}
           {currentScreen === 'map' && (
-            <div className="flex-1 flex items-center gap-2 relative">
-              <div className="flex-1 bg-gray-50 rounded-xl border border-gray-200 px-4 py-2.5 relative">
-                <div className="flex items-center gap-3">
-                  <Search className="w-5 h-5 text-gray-500" />
+            <div className="flex-1 flex items-center gap-1 sm:gap-2 relative">
+              <div className="flex-1 bg-gray-50 rounded-lg sm:rounded-xl border border-gray-200 px-3 sm:px-4 py-2 sm:py-2.5 relative">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <Search className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 flex-shrink-0" />
                   <input
                     type="text"
                     placeholder="Where to?"
@@ -823,7 +841,7 @@ function AppContent() {
                       // Delay hiding suggestions to allow clicking
                       setTimeout(() => setShowSuggestions(false), 200);
                     }}
-                    className="flex-1 bg-transparent border-none outline-none text-gray-700 placeholder-gray-500"
+                    className="flex-1 bg-transparent border-none outline-none text-gray-700 placeholder-gray-500 text-sm sm:text-base"
                   />
                   {searchQuery && (
                     <Button
@@ -835,9 +853,9 @@ function AppContent() {
                         setSearchSuggestions([]);
                         setShowSuggestions(false);
                       }}
-                      className="text-gray-400 hover:text-gray-600"
+                      className="text-gray-400 hover:text-gray-600 h-6 w-6 sm:h-8 sm:w-8 p-0 flex-shrink-0"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-3 h-3 sm:w-4 sm:h-4" />
                     </Button>
                   )}
                 </div>
@@ -878,15 +896,15 @@ function AppContent() {
                 size="sm"
                 onClick={startVoiceSearch}
                 disabled={isVoiceSearching}
-                className={`${isVoiceSearching ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'} text-white`}
+                className={`${isVoiceSearching ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'} text-white h-8 w-8 sm:h-10 sm:w-10 p-0 flex-shrink-0 hidden xs:flex`}
               >
                 {isVoiceSearching ? (
                   <div className="flex items-center gap-1">
-                    <div className="animate-pulse w-2 h-2 bg-white rounded-full" />
-                    <Mic className="w-4 h-4" />
+                    <div className="animate-pulse w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full" />
+                    <Mic className="w-3 h-3 sm:w-4 sm:h-4" />
                   </div>
                 ) : (
-                  <Mic className="w-4 h-4" />
+                  <Mic className="w-3 h-3 sm:w-4 sm:h-4" />
                 )}
               </Button>
               
@@ -906,17 +924,17 @@ function AppContent() {
                     setCurrentScreen('search');
                   }
                 }}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="bg-blue-600 hover:bg-blue-700 text-white h-8 w-8 sm:h-10 sm:w-10 p-0 flex-shrink-0"
               >
-                <Search className="w-4 h-4" />
+                <Search className="w-3 h-3 sm:w-4 sm:h-4" />
               </Button>
             </div>
           )}
           
           {/* Screen Title - show on non-map screens */}
           {currentScreen !== 'map' && (
-            <div className="flex-1">
-              <h1 className="font-semibold text-lg text-gray-900">
+            <div className="flex-1 min-w-0">
+              <h1 className="font-semibold text-base sm:text-lg text-gray-900 truncate">
                 {currentScreen === 'search' && 'Search'}
                 {currentScreen === 'route' && 'Route'}
                 {currentScreen === 'navigation' && 'Navigation'}
@@ -948,41 +966,44 @@ function AppContent() {
           )}
           
           {/* Action Buttons - always visible */}
-          <div className="flex gap-2">
-            <Button
-              size="icon"
-              className="bg-white text-gray-700 shadow-sm border border-gray-200 hover:bg-gray-50"
-              onClick={() => setCurrentScreen('voice')}
-            >
-              <Mic className="w-5 h-5" />
-            </Button>
+          <div className="flex gap-1 sm:gap-2">
+            {/* Show voice button only on larger screens or when not on map */}
+            {currentScreen !== 'map' && (
+              <Button
+                size="icon"
+                className="bg-white text-gray-700 shadow-sm border border-gray-200 hover:bg-gray-50 h-8 w-8 sm:h-10 sm:w-10"
+                onClick={() => setCurrentScreen('voice')}
+              >
+                <Mic className="w-4 h-4 sm:w-5 sm:h-5" />
+              </Button>
+            )}
             
             <Button
               size="icon"
-              className="bg-white text-gray-700 shadow-sm border border-gray-200 hover:bg-gray-50 relative"
+              className="bg-white text-gray-700 shadow-sm border border-gray-200 hover:bg-gray-50 relative h-8 w-8 sm:h-10 sm:w-10"
               onClick={() => setShowNotifications(!showNotifications)}
             >
-              <Bell className="w-5 h-5" />
+              <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
               {showNotifications && (
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full" />
+                <div className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 w-2 h-2 sm:w-3 sm:h-3 bg-red-500 rounded-full" />
               )}
             </Button>
             
             <Button
               size="icon"
-              className="bg-white text-gray-700 shadow-sm border border-gray-200 hover:bg-gray-50"
+              className="bg-white text-gray-700 shadow-sm border border-gray-200 hover:bg-gray-50 h-8 w-8 sm:h-10 sm:w-10"
               onClick={() => setCurrentScreen('profile')}
             >
-              <User className="w-5 h-5" />
+              <User className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
             
             <Button
               size="icon"
-              className="bg-white text-blue-600 shadow-sm border border-gray-200 hover:bg-blue-50"
+              className="bg-white text-blue-600 shadow-sm border border-gray-200 hover:bg-blue-50 h-8 w-8 sm:h-10 sm:w-10 hidden sm:flex"
               onClick={() => setCurrentScreen('offline')}
               title="Offline Maps"
             >
-              <WifiOff className="w-5 h-5" />
+              <WifiOff className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
             
               <ThemeToggle />
@@ -996,7 +1017,7 @@ function AppContent() {
 
       {/* Transport Mode Selector - Only show on map screen */}
       {currentScreen === 'map' && (
-        <div className="absolute top-20 left-4 z-40">
+        <div className="absolute top-16 sm:top-20 left-2 sm:left-4 z-40">
           <TransportModeSelector
             currentMode={transportMode}
             onModeChange={setTransportMode}
@@ -1016,7 +1037,7 @@ function AppContent() {
 
       {/* Smart Notifications - Only show on map screen */}
       {currentScreen === 'map' && showNotifications && (
-        <div className="absolute top-28 left-4 right-4 z-40 max-w-md">
+        <div className="absolute top-24 sm:top-28 left-2 right-2 sm:left-4 sm:right-4 z-40 max-w-xs sm:max-w-md mx-auto">
           <SmartNotifications
             currentLocation={navLocation}
             onActionClick={handleNotificationAction}
@@ -1026,46 +1047,46 @@ function AppContent() {
 
       {/* Quick Action Buttons - Only show on map screen */}
       {currentScreen === 'map' && (
-        <div className="absolute left-4 bottom-32 z-40 flex flex-col gap-3">
+        <div className="absolute left-2 sm:left-4 bottom-24 sm:bottom-32 z-40 flex flex-col gap-2 sm:gap-3">
           <Button
             size="icon"
-            className="h-12 w-12 rounded-2xl bg-white text-gray-700 shadow-lg border border-gray-200 hover:bg-gray-50"
+            className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl sm:rounded-2xl bg-white text-gray-700 shadow-lg border border-gray-200 hover:bg-gray-50 touch-manipulation"
             onClick={() => {
               // Center on current location: trigger a pulse/visual center
               setCenterSignal((n) => n + 1);
             }}
           >
-            <Target className="w-5 h-5" />
+            <Target className="w-4 h-4 sm:w-5 sm:h-5" />
           </Button>
           
           <Button
             size="icon"
-            className="h-12 w-12 rounded-2xl bg-white text-gray-700 shadow-lg border border-gray-200 hover:bg-gray-50"
+            className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl sm:rounded-2xl bg-white text-gray-700 shadow-lg border border-gray-200 hover:bg-gray-50 touch-manipulation"
             onClick={() => setCurrentScreen('saved')}
           >
-            <MapPin className="w-5 h-5" />
+            <MapPin className="w-4 h-4 sm:w-5 sm:h-5" />
           </Button>
           
           <Button
             size="icon"
-            className="h-12 w-12 rounded-2xl bg-white text-orange-600 hover:bg-orange-50 shadow-lg border border-orange-300 dark:bg-orange-600 dark:text-white dark:hover:bg-orange-700 dark:border-white/10"
+            className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl sm:rounded-2xl bg-white text-orange-600 hover:bg-orange-50 shadow-lg border border-orange-300 dark:bg-orange-600 dark:text-white dark:hover:bg-orange-700 dark:border-white/10 touch-manipulation"
             onClick={() => setCurrentScreen('parking')}
           >
-            <Car className="w-5 h-5" />
+            <Car className="w-4 h-4 sm:w-5 sm:h-5" />
           </Button>
           
           <Button
             size="icon"
-            className="h-12 w-12 rounded-2xl bg-white text-purple-600 hover:bg-purple-50 shadow-lg border border-purple-300 dark:bg-purple-600 dark:text-white dark:hover:bg-purple-700 dark:border-white/10"
+            className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl sm:rounded-2xl bg-white text-purple-600 hover:bg-purple-50 shadow-lg border border-purple-300 dark:bg-purple-600 dark:text-white dark:hover:bg-purple-700 dark:border-white/10 touch-manipulation"
             onClick={() => setCurrentScreen('ai-predictions')}
           >
-            <Brain className="w-5 h-5" />
+            <Brain className="w-4 h-4 sm:w-5 sm:h-5" />
           </Button>
         </div>
       )}
 
       {/* Main Content - with proper scrolling; add bottom padding so it doesn't hide behind fixed bottom nav */}
-      <div className="flex-1 relative overflow-y-auto pb-20">
+      <div className="flex-1 relative overflow-y-auto pb-16 sm:pb-20">
         {renderCurrentScreen()}
       </div>
 

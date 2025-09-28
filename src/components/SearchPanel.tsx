@@ -7,22 +7,18 @@ import { logger } from '../utils/logger';
 import { toast } from '../utils/toastConfig';
 import { ToastCategory } from '../utils/toastConfig';
 
+// Import centralized loader
+import { googleMapsLoader } from '../services/googleMapsLoader';
+
 // Google Places Service Interface
 class GooglePlacesSearchService {
-  private isGoogleLoaded(): boolean {
-    return typeof google !== 'undefined' && !!google.maps && !!google.maps.places;
-  }
-
   private async ensureGoogleLoaded(): Promise<boolean> {
-    if (this.isGoogleLoaded()) return true;
-
-    // Wait a bit for Google to load if it's still loading
-    for (let i = 0; i < 10; i++) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      if (this.isGoogleLoaded()) return true;
+    try {
+      return await googleMapsLoader.waitForGoogleMaps();
+    } catch (error) {
+      logger.error('Failed to load Google Maps:', error);
+      return false;
     }
-
-    return false;
   }
 
   async searchPlaces(query: string): Promise<Location[]> {
@@ -242,7 +238,6 @@ export function SearchPanel({ query, onSearch, onLocationSelect, transportMode, 
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [recentSearches, setRecentSearches] = useState<Location[]>([]);
   const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
   // Initialize component
@@ -496,29 +491,28 @@ export function SearchPanel({ query, onSearch, onLocationSelect, transportMode, 
   };
 
   return (
-    <div className="h-full bg-white flex flex-col">
-      {/* Header */}
-      <div className="flex-shrink-0 bg-white px-4 py-4 border-b border-gray-200">
-        <div className="flex items-center gap-3 mb-4">
-          <Button variant="ghost" size="icon" onClick={onBack}>
-            <ArrowLeft className="w-5 h-5" />
+    <div className="h-full flex flex-col bg-white">
+      <div className="flex-shrink-0 p-3 sm:p-4 border-b border-gray-100">
+        {/* Header */}
+        <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
+          <Button variant="ghost" size="icon" onClick={onBack} className="h-8 w-8 sm:h-10 sm:w-10">
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           </Button>
-          <div>
-            <h2 className="font-medium text-gray-900">Search</h2>
-            <p className="text-sm text-gray-500">Find places and addresses</p>
+          <div className="min-w-0">
+            <h2 className="font-medium text-gray-900 text-base sm:text-lg truncate">Search</h2>
+            <p className="text-xs sm:text-sm text-gray-500 truncate">Find places and addresses</p>
           </div>
         </div>
 
         {/* Search Input */}
         <div className="relative">
           <Input
-            ref={inputRef}
             value={searchInput}
             onChange={(e) => {
               setSearchInput(e.target.value);
             }}
             placeholder="Search for places, addresses..."
-            className="pl-10 pr-20"
+            className="pl-9 sm:pl-10 pr-16 sm:pr-20 text-sm sm:text-base"
             onKeyPress={(e) => e.key === 'Enter' && handleSearchSubmit()}
             onFocus={() => {
               if (suggestions.length > 0) {
@@ -527,13 +521,13 @@ export function SearchPanel({ query, onSearch, onLocationSelect, transportMode, 
             }}
             autoFocus
           />
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex gap-1">
+          <Search className="absolute left-2.5 sm:left-3 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400" />
+          <div className="absolute right-0.5 sm:right-1 top-1/2 transform -translate-y-1/2 flex gap-0.5 sm:gap-1">
             {searchInput && (
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="w-8 h-8" 
+                className="w-6 h-6 sm:w-8 sm:h-8 touch-manipulation" 
                 onClick={() => {
                   setSearchInput('');
                   setSuggestions([]);
@@ -541,11 +535,11 @@ export function SearchPanel({ query, onSearch, onLocationSelect, transportMode, 
                   setSearchResults([]);
                 }}
               >
-                <X className="w-4 h-4" />
+                <X className="w-3 h-3 sm:w-4 sm:h-4" />
               </Button>
             )}
-            <Button variant="ghost" size="icon" className="w-8 h-8" onClick={onOpenVoicePanel}>
-              <Mic className="w-4 h-4" />
+            <Button variant="ghost" size="icon" className="w-6 h-6 sm:w-8 sm:h-8 touch-manipulation" onClick={onOpenVoicePanel}>
+              <Mic className="w-3 h-3 sm:w-4 sm:h-4" />
             </Button>
           </div>
           
@@ -553,16 +547,16 @@ export function SearchPanel({ query, onSearch, onLocationSelect, transportMode, 
           {showSuggestions && suggestions.length > 0 && (
             <div 
               ref={suggestionsRef}
-              className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto mt-1"
+              className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-md shadow-lg z-50 max-h-48 sm:max-h-60 overflow-y-auto mt-1"
             >
               {suggestions.map((suggestion) => (
                 <button
                   key={suggestion.id}
-                  className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 flex items-center gap-3"
+                  className="w-full text-left px-3 sm:px-4 py-2.5 sm:py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 flex items-center gap-2 sm:gap-3 touch-manipulation"
                   onClick={() => handleSuggestionSelect(suggestion)}
                 >
-                  <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                  <span className="text-sm text-gray-900 truncate">{suggestion.description}</span>
+                  <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
+                  <span className="text-xs sm:text-sm text-gray-900 truncate">{suggestion.description}</span>
                 </button>
               ))}
             </div>
@@ -572,49 +566,52 @@ export function SearchPanel({ query, onSearch, onLocationSelect, transportMode, 
 
       <div className="flex-1 overflow-y-auto scroll-y hide-scrollbar scroll-smooth">
         {/* Quick Categories */}
-        <div className="px-4 py-4 border-b border-gray-100">
-          <h3 className="font-medium text-gray-900 mb-3">Quick Search</h3>
-          <div className="grid grid-cols-3 gap-3">
+        <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-100">
+          <h3 className="font-medium text-gray-900 mb-2 sm:mb-3 text-sm sm:text-base">Quick Search</h3>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
             {categories.map((category) => (
               <button
                 key={category.id}
-                className="flex flex-col items-center p-3 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex flex-col items-center p-2 sm:p-3 rounded-lg hover:bg-gray-50 transition-colors touch-manipulation"
                 onClick={() => handleCategoryClick(category.id)}
               >
-                <span className="text-2xl mb-1">{category.icon}</span>
-                <span className="text-xs text-gray-700 text-center">{category.name}</span>
+                <span className="text-xl sm:text-2xl mb-1">{category.icon}</span>
+                <span className="text-xs text-gray-700 text-center leading-tight">{category.name}</span>
               </button>
             ))}
           </div>
         </div>
 
         {/* Loading State */}
-        {isLoading && (
-          <div className="px-4 py-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="text-gray-600 mt-2">Searching with OpenRouteService...</p>
+        {isSearching && (
+          <div className="px-3 sm:px-4 py-6 sm:py-8 text-center">
+            <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-gray-600 mt-2 flex items-center justify-center gap-2 text-sm sm:text-base">
+              <Loader className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
+              Searching with Google Places...
+            </p>
           </div>
         )}
 
         {/* Recent Searches */}
-        {!isLoading && searchResults.length === 0 && recentSearches.length > 0 && (
-          <div className="px-4 py-4">
-            <h3 className="font-medium text-gray-900 mb-3">Recent Searches</h3>
-            <div className="space-y-3">
+        {!isSearching && searchResults.length === 0 && recentSearches.length > 0 && (
+          <div className="px-3 sm:px-4 py-3 sm:py-4">
+            <h3 className="font-medium text-gray-900 mb-2 sm:mb-3 text-sm sm:text-base">Recent Searches</h3>
+            <div className="space-y-2 sm:space-y-3">
               {recentSearches.map((place) => (
                 <div
                   key={place.id}
-                  className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="flex items-center gap-3 sm:gap-4 p-2.5 sm:p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors touch-manipulation"
                   onClick={() => handleLocationSelect(place)}
                 >
-                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                    <Clock className="w-5 h-5 text-gray-500" />
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-gray-900 truncate">{place.name}</h4>
-                    <p className="text-sm text-gray-600 truncate">{place.address}</p>
+                    <h4 className="font-medium text-gray-900 truncate text-sm sm:text-base">{place.name}</h4>
+                    <p className="text-xs sm:text-sm text-gray-600 truncate">{place.address}</p>
                   </div>
-                  <Navigation className="w-4 h-4 text-gray-400" />
+                  <Navigation className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
                 </div>
               ))}
             </div>
@@ -623,36 +620,54 @@ export function SearchPanel({ query, onSearch, onLocationSelect, transportMode, 
 
         {/* Search Results */}
         {searchResults.length > 0 && (
-          <div className="px-4 py-4">
-            <h3 className="font-medium text-gray-900 mb-3">Search Results ({searchResults.length})</h3>
-            <div className="space-y-3">
+          <div className="px-3 sm:px-4 py-3 sm:py-4">
+            <h3 className="font-medium text-gray-900 mb-2 sm:mb-3 text-sm sm:text-base">Search Results ({searchResults.length})</h3>
+            <div className="space-y-2 sm:space-y-3">
               {searchResults.map((place) => (
                 <div
                   key={place.id}
-                  className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="flex items-center gap-3 sm:gap-4 p-2.5 sm:p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors touch-manipulation"
                   onClick={() => handleLocationSelect(place)}
                 >
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                    <span className="text-lg">{getCategoryIcon(place.category)}</span>
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <span className="text-base sm:text-lg">{getCategoryIcon(place.category)}</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-gray-900 truncate">{place.name}</h4>
-                    <p className="text-sm text-gray-600 truncate">{place.address}</p>
-                    <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                    <h4 className="font-medium text-gray-900 truncate text-sm sm:text-base">{place.name}</h4>
+                    <p className="text-xs sm:text-sm text-gray-600 truncate">{place.address}</p>
+                    <div className="flex items-center gap-1.5 sm:gap-2 mt-1 text-xs text-gray-500">
                       {place.rating && (
                         <div className="flex items-center gap-1">
-                          <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                          <span>{place.rating.toFixed(1)}</span>
+                          <Star className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-yellow-400 text-yellow-400" />
+                          <span className="text-xs">{place.rating.toFixed(1)}</span>
+                          {place.userRatingsTotal && (
+                            <span className="text-gray-400 text-xs hidden sm:inline">({place.userRatingsTotal})</span>
+                          )}
                         </div>
                       )}
-                      <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                      <span className="text-xs text-gray-600">{place.distance}</span>
-                      {place.accessible && (
-                        <Accessibility className="w-3 h-3 text-blue-500" />
+                      {place.rating && place.distance && (
+                        <span className="w-0.5 h-0.5 sm:w-1 sm:h-1 bg-gray-300 rounded-full" />
+                      )}
+                      {place.distance && (
+                        <span className="text-xs text-gray-600">{place.distance}</span>
+                      )}
+                      {place.priceLevel && place.priceLevel > 0 && (
+                        <>
+                          <span className="w-0.5 h-0.5 sm:w-1 sm:h-1 bg-gray-300 rounded-full" />
+                          <span className="text-green-600 text-xs">{'$'.repeat(place.priceLevel)}</span>
+                        </>
+                      )}
+                      {place.isOpenNow !== undefined && (
+                        <>
+                          <span className="w-0.5 h-0.5 sm:w-1 sm:h-1 bg-gray-300 rounded-full" />
+                          <span className={`text-xs ${place.isOpenNow ? 'text-green-600' : 'text-red-600'}`}>
+                            {place.isOpenNow ? 'Open' : 'Closed'}
+                          </span>
+                        </>
                       )}
                     </div>
                   </div>
-                  <Navigation className="w-4 h-4 text-gray-400" />
+                  <Navigation className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
                 </div>
               ))}
             </div>
@@ -660,11 +675,11 @@ export function SearchPanel({ query, onSearch, onLocationSelect, transportMode, 
         )}
 
         {/* No Results */}
-        {!isLoading && searchResults.length === 0 && searchInput.trim() && (
-          <div className="px-4 py-8 text-center">
-            <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-            <p className="text-gray-600">No results found for "{searchInput}"</p>
-            <p className="text-sm text-gray-500 mt-1">Try a different search term</p>
+        {!isSearching && searchResults.length === 0 && searchInput.trim() && (
+          <div className="px-3 sm:px-4 py-6 sm:py-8 text-center">
+            <MapPin className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-2" />
+            <p className="text-gray-600 text-sm sm:text-base">No results found for "{searchInput}"</p>
+            <p className="text-xs sm:text-sm text-gray-500 mt-1">Try a different search term</p>
           </div>
         )}
       </div>

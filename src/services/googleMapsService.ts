@@ -5,17 +5,11 @@
  * Includes: Maps JavaScript API, Directions API, Places API, Geocoding API
  */
 
-import { Loader } from '@googlemaps/js-api-loader';
 import { logger } from '../utils/logger';
 import { toast } from 'sonner';
-
-interface GoogleMapsConfig {
-  apiKey: string;
-  libraries: string[];
-}
+import { googleMapsLoader } from './googleMapsLoader';
 
 class GoogleMapsService {
-  private loader: Loader | null = null;
   private map: google.maps.Map | null = null;
   private directionsService: google.maps.DirectionsService | null = null;
   private directionsRenderer: google.maps.DirectionsRenderer | null = null;
@@ -23,29 +17,18 @@ class GoogleMapsService {
   private geocoder: google.maps.Geocoder | null = null;
   private isInitialized = false;
 
-  constructor() {
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    if (!apiKey || apiKey === 'YOUR_GOOGLE_MAPS_API_KEY_HERE') {
-      logger.warn('Google Maps API key not configured');
-      return;
-    }
-
-    this.loader = new Loader({
-      apiKey,
-      version: 'weekly',
-      libraries: ['places', 'geometry', 'drawing', 'marker'],
-    });
-  }
-
   /**
-   * Initialize Google Maps APIs
+   * Initialize Google Maps APIs using centralized loader
    */
   async initialize(): Promise<boolean> {
     if (this.isInitialized) return true;
-    if (!this.loader) return false;
 
     try {
-      await this.loader.load();
+      // Use centralized loader
+      const isLoaded = await googleMapsLoader.waitForGoogleMaps();
+      if (!isLoaded) {
+        throw new Error('Google Maps API failed to load');
+      }
       
       this.directionsService = new google.maps.DirectionsService();
       this.directionsRenderer = new google.maps.DirectionsRenderer();
