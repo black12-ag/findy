@@ -1,26 +1,107 @@
+# Dependencies
 node_modules
+backend/node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
 # Environment and secrets
 .env
 .env.*
+!.env.example
 backend/.env
+!backend/.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Build outputs
-build
-dist
-backend/dist
+build/
+dist/
+backend/dist/
+.next/
+out/
+.cache/
 
 # Logs and local data
 *.log
-logs
-backend/logs
+logs/
+backend/logs/
 dev.log
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
 
 # Databases
 backend/prisma/dev.db*
+*.db
+*.sqlite
+*.sqlite3
 
 # OS files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
-# Local Netlify folder
-.netlify
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary folders
+tmp/
+temp/
+
+# Local development
+.netlify/
+.vercel/
+
+# Package manager lock files (keep package-lock.json but ignore others)
+yarn.lock
+pnpm-lock.yaml
+
+# Testing
+.nyc_output
+
+# ESLint cache
+.eslintcache
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# Serverless directories
+.serverless/
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# Storybook build outputs
+storybook-static
