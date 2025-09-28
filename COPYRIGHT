@@ -1,0 +1,79 @@
+# Copyright Notice
+
+## FINDY - Advanced Navigation & Maps Platform
+Copyright © 2024-2025 Munir Ayub. All rights reserved.
+
+### Owner and Lead Developer
+**Munir Ayub**
+- GitHub: [@black12-ag](https://github.com/black12-ag)
+- Email: blackde011@gmail.com
+- Website: https://munir-dev-portfolio-2024.netlify.app
+
+### Project Information
+- **Project Name**: FINDY - Advanced Navigation & Maps Platform
+- **Repository**: https://github.com/black12-ag/findy
+- **Live Demo**: https://findy-navigation-app.netlify.app/
+- **Initial Release**: January 2025
+- **License**: MIT License (see LICENSE file)
+
+### Copyright Statement
+This project and all its associated files, including but not limited to:
+- Source code (TypeScript, JavaScript, CSS, HTML)
+- Documentation and README files
+- Images, icons, and graphical assets
+- Configuration files
+- Build scripts and deployment configurations
+
+are the intellectual property of Munir Ayub and are protected by copyright law.
+
+### Rights Reserved
+The owner, Munir Ayub, reserves all rights to:
+1. The FINDY brand name and associated trademarks
+2. The unique Netflix-inspired UI design implementation
+3. Custom algorithms and navigation logic
+4. Original documentation and technical specifications
+5. Marketing materials and promotional content
+
+### Usage Rights
+Under the MIT License, you are free to:
+- Use the software for personal or commercial purposes
+- Modify the source code
+- Distribute the software
+- Include it in your own projects
+
+PROVIDED THAT:
+- The original copyright notice and license are included
+- Proper attribution is given to Munir Ayub
+- The software is provided "as is" without warranty
+
+### Attribution Requirements
+When using or referencing this project, please include:
+```
+FINDY Navigation Platform - Created by Munir Ayub
+https://github.com/black12-ag/findy
+Copyright © 2024-2025 Munir Ayub
+```
+
+### Third-Party Components
+This project uses various open-source libraries and APIs:
+- React (Copyright © Meta Platforms, Inc.)
+- TypeScript (Copyright © Microsoft Corporation)
+- Vite (Copyright © Evan You & Vite Contributors)
+- Tailwind CSS (Copyright © Tailwind Labs, Inc.)
+- Google Maps API (Copyright © Google LLC)
+- Various npm packages (see package.json for full list)
+
+Each third-party component retains its original copyright and license.
+
+### Disclaimer
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL MUNIR AYUB BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY ARISING FROM THE USE OF THIS SOFTWARE.
+
+### Contact for Licensing Inquiries
+For commercial licensing, custom development, or other inquiries:
+- Email: blackde011@gmail.com
+- GitHub: https://github.com/black12-ag
+
+---
+Last updated: January 2025

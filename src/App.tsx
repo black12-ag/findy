@@ -1,3 +1,12 @@
+/**
+ * FINDY - Advanced Navigation & Maps Platform
+ * Copyright © 2024-2025 Munir Ayub. All rights reserved.
+ * 
+ * @author Munir Ayub <blackde011@gmail.com>
+ * @license MIT
+ * @see https://github.com/black12-ag/findy
+ */
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { GoogleMapView } from './components/GoogleMapView';
 import { SearchPanel } from './components/SearchPanel';
