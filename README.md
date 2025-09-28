@@ -11,8 +11,8 @@
   [![Vite](https://img.shields.io/badge/Vite-6.3.6-646cff?style=for-the-badge&logo=vite)](https://vitejs.dev/)
   [![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
   
-  ![GitHub stars](https://img.shields.io/github/stars/yourusername/findy?style=social)
-  ![GitHub forks](https://img.shields.io/github/forks/yourusername/findy?style=social)
+  ![GitHub stars](https://img.shields.io/github/stars/black12-ag/findy?style=social)
+  ![GitHub forks](https://img.shields.io/github/forks/black12-ag/findy?style=social)
   
 </div>
 
@@ -145,7 +145,7 @@ Modern browser (Chrome 90+, Firefox 88+, Safari 14+)
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/findy.git
+git clone https://github.com/black12-ag/findy.git
 cd findy
 
 # 2. Install dependencies for both frontend and backend
@@ -299,7 +299,7 @@ docker run -p 3000:3000 findy-app
 <td width="33%" align="center">
 
 #### 🌐 **Netlify**
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/yourusername/findy)
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/black12-ag/findy)
 
 **Features:**
 - ✅ Automatic deployments
@@ -311,7 +311,7 @@ docker run -p 3000:3000 findy-app
 <td width="33%" align="center">
 
 #### ▲ **Vercel**
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/findy)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/black12-ag/findy)
 
 **Features:**
 - ✅ Edge network
@@ -521,19 +521,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 <td width="50%">
 
 ### 🆘 **Get Help**
-- 📖 **[Documentation](https://github.com/yourusername/findy/wiki)** - Complete guides & API docs
-- 🐛 **[Report Issues](https://github.com/yourusername/findy/issues)** - Bug reports & feature requests
-- 💬 **[Discussions](https://github.com/yourusername/findy/discussions)** - Community Q&A
-- 📧 **[Email Support](mailto:support@findy.app)** - Direct assistance
+- 📖 **[Documentation](https://github.com/black12-ag/findy/wiki)** - Complete guides & API docs
+- 🐛 **[Report Issues](https://github.com/black12-ag/findy/issues)** - Bug reports & feature requests
+- 💬 **[Discussions](https://github.com/black12-ag/findy/discussions)** - Community Q&A
+- 📧 **[Email Support](mailto:munir@munirchat.org)** - Direct assistance
 
 </td>
 <td width="50%">
 
-### 🤝 **Community**
-- 🌟 **[GitHub Discussions](https://github.com/yourusername/findy/discussions)** - Technical discussions
-- 🐦 **[Twitter Updates](https://twitter.com/findyapp)** - Latest news & tips
-- 📱 **[Discord Server](https://discord.gg/findy)** - Real-time chat
-- 📰 **[Blog](https://blog.findy.app)** - Development updates
+### 🤝 **Community & Developer**
+- 👨‍💻 **[Developer Portfolio](https://github.com/black12-ag/portfolio)** - My other projects
+- 🤖 **[Telegram Bot](https://t.me/MunirChatBot)** - AI Assistant & Support
+- 💼 **[LinkedIn](https://linkedin.com/in/munir)** - Professional updates
+- 📱 **[MunirChat iOS](https://testflight.apple.com/join/DEMO_CODE)** - Try my messaging app
 
 </td>
 </tr>
@@ -551,8 +551,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 | 🛡️ | **Security Updates** | Current |
 | 📱 | **Mobile Optimized** | PWA Ready |
 
-![Build Status](https://img.shields.io/github/actions/workflow/status/yourusername/findy/ci.yml?branch=main)
-![Code Coverage](https://img.shields.io/codecov/c/github/yourusername/findy)
+![Build Status](https://img.shields.io/github/actions/workflow/status/black12-ag/findy/ci.yml?branch=main)
+![Code Coverage](https://img.shields.io/codecov/c/github/black12-ag/findy)
 ![Uptime](https://img.shields.io/uptimerobot/ratio/m792409734-5c3e4b0f7b5b7b0f7b5b7b0f)
 
 </div>
@@ -575,17 +575,80 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
+---
+
+## 👨‍💻 **Meet the Developer**
+
 <div align="center">
+  <h3>🌟 Built with passion by Munir</h3>
   
-  <h3>🌟 Made with ❤️ by the FINDY Team</h3>
+  <p><strong>Full-Stack Mobile Developer & Software Engineer</strong></p>
+  <p><em>Specializing in secure messaging applications, cross-platform development, and AI integration</em></p>
   
   <p>
-    <a href="https://github.com/yourusername/findy/stargazers">⭐ Star us on GitHub</a> •
-    <a href="https://github.com/yourusername/findy/fork">🍴 Fork the project</a> •
+    <a href="https://github.com/black12-ag/findy/stargazers">⭐ Star FINDY on GitHub</a> •
+    <a href="https://github.com/black12-ag/findy/fork">🍴 Fork the project</a> •
     <a href="https://findy-navigation-app.netlify.app/">🚀 Try the live demo</a>
   </p>
   
-  <p><em>Transform your navigation experience today!</em></p>
+  <br>
+  
+  ### 🔗 **Connect With Me**
+  
+  <p>
+    <a href="https://github.com/black12-ag/portfolio">
+      <img src="https://img.shields.io/badge/Portfolio-000000?style=for-the-badge&logo=github&logoColor=white" alt="Portfolio">
+    </a>
+    <a href="https://linkedin.com/in/munir">
+      <img src="https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn">
+    </a>
+    <a href="https://t.me/MunirChatBot">
+      <img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram">
+    </a>
+    <a href="mailto:munir@munirchat.org">
+      <img src="https://img.shields.io/badge/Email-D14836?style=for-the-badge&logo=gmail&logoColor=white" alt="Email">
+    </a>
+  </p>
+  
+  <br>
+  
+  ### 🚀 **Other Projects by Munir**
+  
+  <table>
+  <tr>
+  <td align="center" width="33%">
+    <h4>📱 MunirChat iOS</h4>
+    <p>Secure messaging app with E2E encryption</p>
+    <p>
+      <a href="https://testflight.apple.com/join/DEMO_CODE">
+        <img src="https://img.shields.io/badge/TestFlight-0D96F6?style=flat&logo=app-store&logoColor=white" alt="iOS">
+      </a>
+    </p>
+  </td>
+  <td align="center" width="33%">
+    <h4>🤖 MunirChat Android</h4>
+    <p>Material You design with adaptive icons</p>
+    <p>
+      <a href="https://play.google.com/apps/testing/org.munirchat.app">
+        <img src="https://img.shields.io/badge/Play_Store-414141?style=flat&logo=google-play&logoColor=white" alt="Android">
+      </a>
+    </p>
+  </td>
+  <td align="center" width="33%">
+    <h4>🤖 AI Assistant Bot</h4>
+    <p>24/7 intelligent chatbot support</p>
+    <p>
+      <a href="https://t.me/MunirChatBot">
+        <img src="https://img.shields.io/badge/Try_Bot-2CA5E0?style=flat&logo=telegram&logoColor=white" alt="Bot">
+      </a>
+    </p>
+  </td>
+  </tr>
+  </table>
+  
+  <br>
+  
+  <p><em>"Transform your navigation experience with cutting-edge technology!"</em></p>
   
   ![Findy Logo](public/fin.png)
   
