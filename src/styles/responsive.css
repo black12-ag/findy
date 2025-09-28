@@ -1,0 +1,335 @@
+/**
+ * 📱 Responsive Mobile-First Styles
+ * 
+ * Global styles to ensure all components work well on mobile and tablet devices
+ */
+
+/* Touch-friendly button minimum sizes */
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
+/* Minimum touch target size (44px recommended by Apple/Google) */
+button, 
+.button,
+[role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Smaller buttons on small screens but still touch-friendly */
+@media (max-width: 640px) {
+  button:not(.btn-large), 
+  .button:not(.btn-large),
+  [role="button"]:not(.btn-large) {
+    min-height: 40px;
+    min-width: 40px;
+  }
+}
+
+/* Better scrolling on mobile */
+.scroll-smooth {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Hide scrollbars but keep functionality */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Better text selection on mobile */
+.text-select-none {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Prevent zoom on form inputs on iOS */
+input[type="search"],
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="url"],
+input[type="password"],
+input[type="number"],
+select,
+textarea {
+  font-size: 16px;
+}
+
+@media (max-width: 640px) {
+  input[type="search"],
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="password"],
+  input[type="number"],
+  select,
+  textarea {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+}
+
+/* Safe area padding for devices with notches */
+.safe-area-pb {
+  padding-bottom: constant(safe-area-inset-bottom);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-area-pt {
+  padding-top: constant(safe-area-inset-top);
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-area-pl {
+  padding-left: constant(safe-area-inset-left);
+  padding-left: env(safe-area-inset-left);
+}
+
+.safe-area-pr {
+  padding-right: constant(safe-area-inset-right);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Better tap highlights */
+button, 
+.button,
+[role="button"],
+a {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive text sizing */
+@media (max-width: 640px) {
+  .text-responsive-sm {
+    font-size: 0.875rem; /* 14px */
+    line-height: 1.25rem; /* 20px */
+  }
+  
+  .text-responsive-base {
+    font-size: 1rem; /* 16px */
+    line-height: 1.5rem; /* 24px */
+  }
+  
+  .text-responsive-lg {
+    font-size: 1.125rem; /* 18px */
+    line-height: 1.75rem; /* 28px */
+  }
+}
+
+/* Responsive spacing */
+@media (max-width: 640px) {
+  .p-responsive {
+    padding: 0.75rem; /* 12px */
+  }
+  
+  .px-responsive {
+    padding-left: 0.75rem; /* 12px */
+    padding-right: 0.75rem; /* 12px */
+  }
+  
+  .py-responsive {
+    padding-top: 0.75rem; /* 12px */
+    padding-bottom: 0.75rem; /* 12px */
+  }
+  
+  .m-responsive {
+    margin: 0.75rem; /* 12px */
+  }
+  
+  .gap-responsive {
+    gap: 0.5rem; /* 8px */
+  }
+}
+
+@media (min-width: 641px) {
+  .p-responsive {
+    padding: 1rem; /* 16px */
+  }
+  
+  .px-responsive {
+    padding-left: 1rem; /* 16px */
+    padding-right: 1rem; /* 16px */
+  }
+  
+  .py-responsive {
+    padding-top: 1rem; /* 16px */
+    padding-bottom: 1rem; /* 16px */
+  }
+  
+  .m-responsive {
+    margin: 1rem; /* 16px */
+  }
+  
+  .gap-responsive {
+    gap: 0.75rem; /* 12px */
+  }
+}
+
+/* Line clamping for mobile */
+.line-clamp-1 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+/* Better focus indicators for accessibility */
+button:focus,
+.button:focus,
+[role="button"]:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid #3B82F6;
+  outline-offset: 2px;
+}
+
+/* Improved card responsiveness */
+.card-responsive {
+  border-radius: 0.5rem; /* 8px */
+  padding: 0.75rem; /* 12px */
+}
+
+@media (min-width: 641px) {
+  .card-responsive {
+    border-radius: 0.75rem; /* 12px */
+    padding: 1rem; /* 16px */
+  }
+}
+
+/* Mobile-optimized modal/sheet positioning */
+@media (max-width: 640px) {
+  .modal-mobile {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 0;
+    margin: 0;
+    max-height: 100vh;
+    max-width: 100vw;
+  }
+  
+  .sheet-mobile {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-top-left-radius: 1rem;
+    border-top-right-radius: 1rem;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    max-height: 90vh;
+  }
+}
+
+/* Responsive grid adjustments */
+@media (max-width: 640px) {
+  .grid-responsive-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  
+  .grid-responsive-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  
+  .grid-responsive-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 641px) {
+  .grid-responsive-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  
+  .grid-responsive-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  
+  .grid-responsive-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Responsive image sizing */
+.img-responsive {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Loading states */
+.loading-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Better contrast for accessibility */
+@media (prefers-contrast: high) {
+  .text-gray-500 {
+    color: #374151 !important;
+  }
+  
+  .text-gray-400 {
+    color: #4B5563 !important;
+  }
+  
+  .text-gray-300 {
+    color: #6B7280 !important;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-delay: -1ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    background-attachment: initial !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+  }
+}
+
+/* High DPI/Retina display optimizations */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 2dppx) {
+  .icon-sharp {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+}

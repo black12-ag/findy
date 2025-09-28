@@ -2952,3 +2952,6 @@ html {
 .scrollbar-track-gray-100 {
   scrollbar-color: transparent #f3f4f6;
 }
+
+/* Import responsive mobile-first styles */
+@import './styles/responsive.css';

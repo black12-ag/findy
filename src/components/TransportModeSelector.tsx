@@ -18,7 +18,7 @@ export function TransportModeSelector({ currentMode, onModeChange }: TransportMo
   ];
 
   return (
-    <div className="inline-flex gap-2">
+    <div className="inline-flex gap-1 sm:gap-2">
       {modes.map((m) => {
         const isActive = currentMode === m.mapsTo;
         return (
@@ -26,15 +26,15 @@ export function TransportModeSelector({ currentMode, onModeChange }: TransportMo
             key={m.key}
             variant={isActive ? 'default' : 'ghost'}
             aria-label={m.name}
-            className={`h-12 rounded-xl border-0 justify-center flex-row gap-2 px-3 min-w-[80px] shadow-lg ${
+            className={`h-8 w-8 sm:h-12 sm:w-auto rounded-lg sm:rounded-xl border-0 justify-center flex-row gap-0 sm:gap-2 p-1 sm:px-3 sm:min-w-[80px] shadow-lg ${
               isActive ? 'text-white' : 'text-gray-700 bg-white/95 backdrop-blur hover:bg-white'
             }`}
             style={isActive ? { backgroundColor: m.color } : {}}
             onClick={() => onModeChange(m.mapsTo)}
             title={m.name}
           >
-            <span className="text-lg leading-none">{m.label}</span>
-            <span className="text-sm leading-none">{m.name}</span>
+            <span className="text-sm sm:text-lg leading-none">{m.label}</span>
+            <span className="hidden sm:inline text-sm leading-none">{m.name}</span>
           </Button>
         );
       })}

@@ -198,7 +198,7 @@ export function SettingsPanel({ onBack, onNavigateToIntegrations, onNavigateToFl
 
         <div className="flex-1 overflow-y-auto scroll-y hide-scrollbar scroll-smooth">
           {/* Voice Selection */}
-          <Card className="m-4 p-4">
+          <Card className="m-3 sm:m-4 p-3 sm:p-4">
             <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
               <Mic className="w-5 h-5" />
               Voice Selection

@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Navigation Test - Findy</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+        }
+        .success { border-color: #4CAF50; background: #f9fff9; }
+        .error { border-color: #f44336; background: #fff9f9; }
+        .warning { border-color: #ff9800; background: #fffaf5; }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover { background: #45a049; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 14px;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔊 Voice Navigation Test</h1>
+        <p>Test voice navigation functionality in isolation</p>
+
+        <div class="test-section" id="apiCheck">
+            <h3>Speech Synthesis API Check</h3>
+            <p id="apiStatus">Checking...</p>
+        </div>
+
+        <div class="test-section">
+            <h3>Basic Voice Tests</h3>
+            <button onclick="testBasicSpeech()">Test Basic Speech</button>
+            <button onclick="testNavigationAnnouncements()">Test Navigation Announcements</button>
+            <button onclick="testWrongWayAlert()">Test Wrong-Way Alert</button>
+            <button onclick="testTurnInstructions()">Test Turn Instructions</button>
+        </div>
+
+        <div class="test-section">
+            <h3>Voice Navigation Service Tests</h3>
+            <button onclick="testVoiceService()">Test Voice Service</button>
+            <button onclick="testVoiceToggle()">Test Voice Toggle</button>
+            <button onclick="testCompleteNavigation()">Test Complete Navigation Flow</button>
+        </div>
+
+        <div class="test-section">
+            <h3>Test Results</h3>
+            <div id="testLog" class="log">Ready to run tests...\n</div>
+            <button onclick="clearLog()">Clear Log</button>
+        </div>
+    </div>
+
+    <script>
+        let log = document.getElementById('testLog');
+        
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = {
+                'info': 'ℹ️',
+                'success': '✅',
+                'error': '❌',
+                'warning': '⚠️'
+            }[type] || 'ℹ️';
+            
+            log.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        function clearLog() {
+            log.textContent = 'Ready to run tests...\n';
+        }
+
+        // Check Speech Synthesis API
+        function checkSpeechAPI() {
+            const apiSection = document.getElementById('apiCheck');
+            const apiStatus = document.getElementById('apiStatus');
+            
+            if ('speechSynthesis' in window) {
+                apiSection.className = 'test-section success';
+                apiStatus.innerHTML = '✅ Speech Synthesis API is supported!';
+                addLog('Speech Synthesis API is available', 'success');
+                
+                // Check voices
+                const voices = speechSynthesis.getVoices();
+                addLog(`Available voices: ${voices.length}`, 'info');
+                
+                if (voices.length === 0) {
+                    // Voices might not be loaded yet
+                    speechSynthesis.onvoiceschanged = () => {
+                        const newVoices = speechSynthesis.getVoices();
+                        addLog(`Voices loaded: ${newVoices.length}`, 'success');
+                    };
+                }
+            } else {
+                apiSection.className = 'test-section error';
+                apiStatus.innerHTML = '❌ Speech Synthesis API is NOT supported';
+                addLog('Speech Synthesis API is not supported', 'error');
+            }
+        }
+
+        // Basic speech test
+        function testBasicSpeech() {
+            addLog('Testing basic speech synthesis...', 'info');
+            
+            if (!('speechSynthesis' in window)) {
+                addLog('Speech synthesis not supported', 'error');
+                return;
+            }
+            
+            const utterance = new SpeechSynthesisUtterance('Hello! This is a basic voice test for the Findy navigation app.');
+            
+            utterance.onstart = () => addLog('Basic speech started', 'success');
+            utterance.onend = () => addLog('Basic speech completed', 'success');
+            utterance.onerror = (event) => addLog(`Speech error: ${event.error}`, 'error');
+            
+            speechSynthesis.speak(utterance);
+        }
+
+        // Test navigation announcements
+        function testNavigationAnnouncements() {
+            addLog('Testing navigation announcements...', 'info');
+            
+            const announcements = [
+                'Starting navigation. Total distance 2.5 kilometers, estimated time 8 minutes.',
+                'In 200 meters, turn left.',
+                'In 100 meters, turn right onto Main Street.',
+                'Turn left now.',
+                'Continue straight for 500 meters.'
+            ];
+            
+            let index = 0;
+            function speakNext() {
+                if (index < announcements.length) {
+                    const utterance = new SpeechSynthesisUtterance(announcements[index]);
+                    utterance.onend = () => {
+                        addLog(`Announcement ${index + 1} completed`, 'success');
+                        index++;
+                        setTimeout(speakNext, 1000); // Wait 1 second between announcements
+                    };
+                    utterance.onerror = (event) => addLog(`Announcement error: ${event.error}`, 'error');
+                    
+                    addLog(`Speaking: "${announcements[index]}"`, 'info');
+                    speechSynthesis.speak(utterance);
+                }
+            }
+            
+            speakNext();
+        }
+
+        // Test wrong-way alert
+        function testWrongWayAlert() {
+            addLog('Testing wrong-way alert...', 'info');
+            
+            const utterance = new SpeechSynthesisUtterance("You're heading in the wrong direction. Please turn around to get back on route.");
+            utterance.rate = 1.1; // Slightly faster for urgency
+            utterance.volume = 1.0; // Full volume
+            
+            utterance.onstart = () => addLog('Wrong-way alert started', 'success');
+            utterance.onend = () => addLog('Wrong-way alert completed', 'success');
+            utterance.onerror = (event) => addLog(`Wrong-way alert error: ${event.error}`, 'error');
+            
+            speechSynthesis.speak(utterance);
+        }
+
+        // Test turn instructions
+        function testTurnInstructions() {
+            addLog('Testing turn-by-turn instructions...', 'info');
+            
+            const instructions = [
+                { text: 'In 300 meters, turn right', distance: 300 },
+                { text: 'In 200 meters, turn right', distance: 200 },
+                { text: 'In 100 meters, turn right', distance: 100 },
+                { text: 'Turn right now', distance: 0 }
+            ];
+            
+            let index = 0;
+            function announceNext() {
+                if (index < instructions.length) {
+                    const instruction = instructions[index];
+                    const utterance = new SpeechSynthesisUtterance(instruction.text);
+                    
+                    if (instruction.distance <= 50) {
+                        utterance.rate = 1.1; // Faster for immediate turns
+                        utterance.volume = 1.0; // Louder for immediate turns
+                    }
+                    
+                    utterance.onend = () => {
+                        addLog(`Turn instruction completed: ${instruction.text}`, 'success');
+                        index++;
+                        setTimeout(announceNext, 2000); // 2 seconds between instructions
+                    };
+                    utterance.onerror = (event) => addLog(`Turn instruction error: ${event.error}`, 'error');
+                    
+                    addLog(`Announcing turn: "${instruction.text}"`, 'info');
+                    speechSynthesis.speak(utterance);
+                }
+            }
+            
+            announceNext();
+        }
+
+        // Test voice service (simulated)
+        function testVoiceService() {
+            addLog('Testing voice service functionality...', 'info');
+            
+            // Simulate the voice navigation service
+            class TestVoiceNavigationService {
+                constructor() {
+                    this.synthesis = window.speechSynthesis;
+                    this.isEnabled = true;
+                    addLog('Voice navigation service initialized', 'success');
+                }
+                
+                speak(text, priority = 'normal') {
+                    if (!this.synthesis || !this.isEnabled) {
+                        addLog('Voice service not available or disabled', 'warning');
+                        return;
+                    }
+                    
+                    if (priority === 'high' && this.synthesis.speaking) {
+                        this.synthesis.cancel();
+                        addLog('Cancelled current speech for high priority', 'info');
+                    }
+                    
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.rate = 1.0;
+                    utterance.pitch = 1.0;
+                    utterance.volume = 1.0;
+                    utterance.lang = 'en-US';
+                    
+                    utterance.onstart = () => addLog(`Speaking: "${text}"`, 'info');
+                    utterance.onend = () => addLog('Speech completed', 'success');
+                    utterance.onerror = (event) => addLog(`Speech error: ${event.error}`, 'error');
+                    
+                    this.synthesis.speak(utterance);
+                }
+                
+                toggle() {
+                    this.isEnabled = !this.isEnabled;
+                    addLog(`Voice navigation ${this.isEnabled ? 'enabled' : 'disabled'}`, 'info');
+                    return this.isEnabled;
+                }
+                
+                isVoiceEnabled() {
+                    return this.isEnabled && this.synthesis !== null;
+                }
+            }
+            
+            const voiceService = new TestVoiceNavigationService();
+            
+            // Test basic functionality
+            setTimeout(() => {
+                voiceService.speak('Voice service is working correctly');
+            }, 500);
+            
+            setTimeout(() => {
+                voiceService.speak('This is a high priority announcement', 'high');
+            }, 3000);
+        }
+
+        // Test voice toggle
+        function testVoiceToggle() {
+            addLog('Testing voice toggle functionality...', 'info');
+            
+            let isEnabled = true;
+            
+            function toggleVoice() {
+                isEnabled = !isEnabled;
+                const message = `Voice navigation ${isEnabled ? 'enabled' : 'disabled'}`;
+                addLog(message, 'info');
+                
+                if (isEnabled) {
+                    const utterance = new SpeechSynthesisUtterance('Voice navigation enabled');
+                    utterance.onend = () => addLog('Toggle announcement completed', 'success');
+                    speechSynthesis.speak(utterance);
+                }
+            }
+            
+            // Test toggle sequence
+            setTimeout(() => {
+                addLog('Disabling voice...', 'info');
+                toggleVoice(); // Disable
+            }, 1000);
+            
+            setTimeout(() => {
+                addLog('Enabling voice...', 'info');
+                toggleVoice(); // Enable (should speak)
+            }, 3000);
+        }
+
+        // Test complete navigation flow
+        function testCompleteNavigation() {
+            addLog('Testing complete navigation flow...', 'info');
+            
+            const navigationFlow = [
+                { delay: 0, text: 'Starting navigation to your destination', type: 'start' },
+                { delay: 2000, text: 'In 500 meters, turn left onto Church Street', type: 'instruction' },
+                { delay: 5000, text: 'In 200 meters, turn left', type: 'instruction' },
+                { delay: 7000, text: 'Turn left now', type: 'immediate' },
+                { delay: 9000, text: 'Continue straight for 800 meters', type: 'instruction' },
+                { delay: 12000, text: 'You have arrived at your destination', type: 'arrival' }
+            ];
+            
+            navigationFlow.forEach((step, index) => {
+                setTimeout(() => {
+                    const utterance = new SpeechSynthesisUtterance(step.text);
+                    
+                    // Adjust speech parameters based on type
+                    switch (step.type) {
+                        case 'immediate':
+                            utterance.rate = 1.1;
+                            utterance.volume = 1.0;
+                            break;
+                        case 'arrival':
+                            utterance.rate = 0.9;
+                            utterance.pitch = 1.1;
+                            break;
+                        default:
+                            utterance.rate = 1.0;
+                            utterance.volume = 0.9;
+                    }
+                    
+                    utterance.onstart = () => addLog(`Step ${index + 1}: ${step.text}`, 'info');
+                    utterance.onend = () => addLog(`Step ${index + 1} completed`, 'success');
+                    utterance.onerror = (event) => addLog(`Step ${index + 1} error: ${event.error}`, 'error');
+                    
+                    speechSynthesis.speak(utterance);
+                }, step.delay);
+            });
+        }
+
+        // Initialize on load
+        window.onload = () => {
+            checkSpeechAPI();
+            addLog('Voice navigation test page loaded', 'success');
+            addLog('Click buttons above to test different voice features', 'info');
+        };
+    </script>
+</body>
+</html>

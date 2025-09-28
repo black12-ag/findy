@@ -48,6 +48,7 @@ interface SmartNotificationsProps {
 export function SmartNotifications({ currentLocation, onActionClick }: SmartNotificationsProps) {
   const [notifications, setNotifications] = useState<SmartNotification[]>([]);
   const [showAll, setShowAll] = useState(false);
+  const [dismissTimers, setDismissTimers] = useState<Map<string, NodeJS.Timeout>>(new Map());
 
   // Generate smart notifications
   useEffect(() => {
@@ -189,14 +190,29 @@ export function SmartNotifications({ currentLocation, onActionClick }: SmartNoti
       });
 
       setNotifications(smartNotifications);
+      
+      // Set auto-dismiss timers for new notifications
+      smartNotifications.forEach(notification => {
+        if (!dismissTimers.has(notification.id)) {
+          const timer = setTimeout(() => {
+            dismissNotification(notification.id);
+          }, 2000); // Auto-dismiss after 2 seconds
+          
+          setDismissTimers(prev => new Map(prev).set(notification.id, timer));
+        }
+      });
     };
 
     generateNotifications();
     
     // Update notifications every 5 minutes
     const interval = setInterval(generateNotifications, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [currentLocation]);
+    return () => {
+      clearInterval(interval);
+      // Clear all timers on cleanup
+      dismissTimers.forEach(timer => clearTimeout(timer));
+    };
+  }, [currentLocation, dismissTimers]);
 
   const dismissNotification = (id: string) => {
     setNotifications(prev =>
@@ -206,6 +222,17 @@ export function SmartNotifications({ currentLocation, onActionClick }: SmartNoti
           : notification
       )
     );
+    
+    // Clear timer for this notification
+    const timer = dismissTimers.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      setDismissTimers(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(id);
+        return newMap;
+      });
+    }
   };
 
   const handleActionClick = (notification: SmartNotification) => {
@@ -216,7 +243,7 @@ export function SmartNotifications({ currentLocation, onActionClick }: SmartNoti
   };
 
   const activeNotifications = notifications.filter(n => !n.dismissed);
-  const displayNotifications = showAll ? activeNotifications : activeNotifications.slice(0, 3);
+  const displayNotifications = showAll ? activeNotifications : activeNotifications.slice(0, 2); // Show only 2 notifications max
 
   const getPriorityBadgeColor = (priority: string) => {
     switch (priority) {
@@ -244,64 +271,41 @@ export function SmartNotifications({ currentLocation, onActionClick }: SmartNoti
               exit={{ opacity: 0, y: -14, scale: 0.95 }}
               transition={{ duration: 0.2 }}
             >
-              <Card className="p-2 shadow-lg border-l-4" style={{ borderLeftColor: notification.color }}>
-                <div className="flex items-start gap-1.5">
+              <Card className="p-1.5 shadow-md border-l-2" style={{ borderLeftColor: notification.color }}>
+                <div className="flex items-center gap-2">
                   <div 
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-white flex-shrink-0"
+                    className="w-4 h-4 rounded-full flex items-center justify-center text-white flex-shrink-0"
                     style={{ backgroundColor: notification.color }}
                   >
-                    <Icon className="w-3.5 h-3.5" />
+                    <Icon className="w-2.5 h-2.5" />
                   </div>
                   
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-1 mb-0.5">
-                      <h4 className="font-semibold text-sm leading-tight truncate">{notification.title}</h4>
-                      <div className="flex items-center gap-1">
-                        <Badge 
-                          variant="outline" 
-                          className={`text-[10px] px-1 py-0 ${getPriorityBadgeColor(notification.priority)}`}
-                        >
-                          {notification.priority}
-                        </Badge>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="w-4 h-4 text-gray-400 hover:text-gray-600"
-                          onClick={() => dismissNotification(notification.id)}
-                          aria-label="Dismiss"
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </div>
+                    <div className="flex items-center justify-between gap-1">
+                      <h4 className="font-medium text-xs leading-tight truncate">{notification.title}</h4>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="w-3 h-3 text-gray-400 hover:text-gray-600 p-0"
+                        onClick={() => dismissNotification(notification.id)}
+                        aria-label="Dismiss"
+                      >
+                        <X className="w-2 h-2" />
+                      </Button>
                     </div>
                     
-                    <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{notification.message}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">{notification.message}</p>
                     
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1 text-[10px] text-gray-500">
-                        <span>{notification.timestamp}</span>
-                        {notification.location && (
-                          <>
-                            <span>•</span>
-                            <div className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              <span className="truncate max-w-[120px]">{notification.location}</span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                      
-                      {notification.actionText && (
-                        <Button
-                          size="sm"
-                          className="h-6 px-2 py-0.5 text-[11px]"
-                          style={{ backgroundColor: notification.color }}
-                          onClick={() => handleActionClick(notification)}
-                        >
-                          {notification.actionText}
-                        </Button>
-                      )}
-                    </div>
+                    {notification.actionText && (
+                      <Button
+                        size="sm"
+                        className="h-4 px-1.5 py-0 text-[9px] mt-1"
+                        style={{ backgroundColor: notification.color }}
+                        onClick={() => handleActionClick(notification)}
+                      >
+                        {notification.actionText}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </Card>
@@ -310,37 +314,22 @@ export function SmartNotifications({ currentLocation, onActionClick }: SmartNoti
         })}
       </AnimatePresence>
 
-      {/* Show More/Less Button */}
-      {activeNotifications.length > 3 && (
+      {/* Show More/Less Button - Only for more than 2 */}
+      {activeNotifications.length > 2 && (
         <div className="text-center">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setShowAll(!showAll)}
-            className="text-gray-600 text-[11px]"
+            className="text-gray-600 text-[9px] h-4 px-2"
           >
             {showAll ? (
-              <>Show Less</>
+              <>Less</>
             ) : (
-              <>Show {activeNotifications.length - 3} More Notifications</>
+              <>+{activeNotifications.length - 2}</>
             )}
           </Button>
         </div>
-      )}
-
-      {/* Smart Insights */}
-      {activeNotifications.length > 0 && (
-        <Card className="p-2 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
-          <div className="flex items-center gap-1.5">
-            <Zap className="w-3.5 h-3.5 text-purple-600" />
-            <div>
-              <h4 className="font-medium text-purple-900 text-xs">Smart Insights</h4>
-              <p className="text-[11px] text-purple-800">
-                Based on your patterns, we predict 15% less traffic if you leave 8 minutes earlier.
-              </p>
-            </div>
-          </div>
-        </Card>
       )}
     </div>
   );

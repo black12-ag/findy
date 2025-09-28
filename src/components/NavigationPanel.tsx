@@ -277,38 +277,38 @@ export function NavigationPanel({ route, onStopNavigation, onStartAR, onShareETA
     <div className="h-full bg-white flex flex-col">
       {/* Top Status Bar */}
       <div 
-        className="flex-shrink-0 px-4 py-3 text-white"
+        className="flex-shrink-0 px-3 sm:px-4 py-2 sm:py-3 text-white"
         style={{ backgroundColor: getTransportColor() }}
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
             <Button
               variant="ghost"
               size="icon"
-              className="text-white hover:bg-white/20"
+              className="text-white hover:bg-white/20 h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0"
               onClick={onStopNavigation}
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
-            <div>
-              <div className="font-medium">{remainingTime} • {remainingDistance}</div>
-              <div className="text-sm opacity-90">Arriving at {route.to.name}</div>
+            <div className="min-w-0">
+              <div className="font-medium text-sm sm:text-base truncate">{remainingTime} • {remainingDistance}</div>
+              <div className="text-xs sm:text-sm opacity-90 truncate">Arriving at {route.to.name}</div>
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             <Button
               variant="ghost"
               size="icon"
-              className="text-white hover:bg-white/20"
+              className="text-white hover:bg-white/20 h-8 w-8 sm:h-10 sm:w-10"
               onClick={() => setIsMuted(!isMuted)}
             >
-              {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+              {isMuted ? <VolumeX className="w-4 h-4 sm:w-5 sm:h-5" /> : <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" />}
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="text-white hover:bg-white/20"
+              className="text-white hover:bg-white/20 h-8 w-8 sm:h-10 sm:w-10"
               onClick={() => {
                 // Emergency call function
                 if ('tel:' in window) {
@@ -319,7 +319,7 @@ export function NavigationPanel({ route, onStopNavigation, onStartAR, onShareETA
                 }
               }}
             >
-              <Phone className="w-5 h-5" />
+              <Phone className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
           </div>
         </div>
@@ -333,19 +333,19 @@ export function NavigationPanel({ route, onStopNavigation, onStartAR, onShareETA
       {/* Main Navigation Display */}
       <div className="flex-1 flex flex-col">
         {/* Next Turn Information */}
-        <div className="flex-shrink-0 px-6 py-8 text-center bg-gray-50">
-          <div className="mb-4">
-            <div className="w-16 h-16 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-3">
+        <div className="flex-shrink-0 px-3 sm:px-6 py-6 sm:py-8 text-center bg-gray-50">
+          <div className="mb-3 sm:mb-4">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-2 sm:mb-3">
               <Navigation 
-                className="w-8 h-8 text-blue-600" 
+                className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" 
                 style={{ transform: 'rotate(45deg)' }}
               />
             </div>
-            <div className="text-3xl font-light text-gray-900 mb-1">{nextTurnDistance}</div>
-            <div className="text-gray-600">Then turn right</div>
+            <div className="text-2xl sm:text-3xl font-light text-gray-900 mb-1">{nextTurnDistance}</div>
+            <div className="text-gray-600 text-sm sm:text-base">Then turn right</div>
           </div>
           
-          <div className="text-lg text-gray-900 font-medium">
+          <div className="text-base sm:text-lg text-gray-900 font-medium px-2">
             {route.steps[currentStep] || 'Continue straight'}
           </div>
         </div>

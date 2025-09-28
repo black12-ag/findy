@@ -294,7 +294,7 @@ function AppContent() {
       const transcript = event.results[0][0].transcript;
       setSearchQuery(transcript);
       handleSearch(transcript);
-      toast.success(`Searching for: "${transcript}"`);
+      // Voice search completed silently
     };
     
     recognition.onerror = (event) => {
@@ -325,10 +325,7 @@ function AppContent() {
       transit: '🚌'
     }[transportMode as string] || '📍';
     
-    // Show quick feedback
-    toast.info(`${modeEmoji} Getting ${transportMode} directions to ${location.name}...`, {
-      duration: 2000
-    });
+    // Getting directions silently
   };
 
   // Handle detailed route planning (but keep on map)
@@ -347,9 +344,7 @@ function AppContent() {
       transit: '🚌'
     }[transportMode as string] || '📍';
     
-    toast.info(`${modeEmoji} Calculating detailed ${transportMode} route...`, {
-      duration: 2500
-    });
+    // Calculating detailed route silently
   };
 
   const handleStartNavigation = (route: Route) => {
@@ -999,7 +994,7 @@ function AppContent() {
             
             <Button
               size="icon"
-              className="bg-white text-blue-600 shadow-sm border border-gray-200 hover:bg-blue-50 h-8 w-8 sm:h-10 sm:w-10 hidden sm:flex"
+              className="bg-white text-blue-600 shadow-sm border border-gray-200 hover:bg-blue-50 h-8 w-8 sm:h-10 sm:w-10"
               onClick={() => setCurrentScreen('offline')}
               title="Offline Maps"
             >
@@ -1017,7 +1012,7 @@ function AppContent() {
 
       {/* Transport Mode Selector - Only show on map screen */}
       {currentScreen === 'map' && (
-        <div className="absolute top-16 sm:top-20 left-2 sm:left-4 z-40">
+        <div className="absolute top-16 sm:top-20 left-1 sm:left-4 z-50 drop-shadow-lg">
           <TransportModeSelector
             currentMode={transportMode}
             onModeChange={setTransportMode}
@@ -1037,7 +1032,7 @@ function AppContent() {
 
       {/* Smart Notifications - Only show on map screen */}
       {currentScreen === 'map' && showNotifications && (
-        <div className="absolute top-24 sm:top-28 left-2 right-2 sm:left-4 sm:right-4 z-40 max-w-xs sm:max-w-md mx-auto">
+        <div className="absolute top-14 sm:top-16 right-2 z-50 w-64 sm:w-80">
           <SmartNotifications
             currentLocation={navLocation}
             onActionClick={handleNotificationAction}

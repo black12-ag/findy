@@ -120,57 +120,58 @@ export function PlaceDetailsSheet({
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent side="bottom" className="h-[85vh] p-0">
+      <SheetContent side="bottom" className="h-[90vh] sm:h-[85vh] p-0 sheet-mobile">
         <div className="flex flex-col h-full">
           {/* Header */}
-          <SheetHeader className="p-6 pb-4 border-b">
+          <SheetHeader className="p-3 sm:p-6 pb-3 sm:pb-4 border-b">
             <div className="flex items-start justify-between">
-              <div className="flex-1 pr-4">
-                <SheetTitle className="text-xl font-bold mb-2">{place.name}</SheetTitle>
-                <div className="flex items-center gap-3 mb-2">
+              <div className="flex-1 pr-2 sm:pr-4 min-w-0">
+                <SheetTitle className="text-lg sm:text-xl font-bold mb-1 sm:mb-2 truncate">{place.name}</SheetTitle>
+                <div className="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-2 text-xs sm:text-sm">
                   <div className="flex items-center gap-1">
-                    <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                    <Star className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-400 fill-current" />
                     <span className="font-medium">{place.rating}</span>
                     <span className="text-gray-500">({place.reviewCount})</span>
                   </div>
                   <span className="text-gray-400">•</span>
                   <span className="text-gray-600">{getPriceDisplay(place.priceLevel)}</span>
-                  <span className="text-gray-400">•</span>
+                  <span className="text-gray-400 hidden sm:inline">•</span>
                   <Badge variant={place.isOpen ? "default" : "secondary"} className="text-xs">
                     {place.isOpen ? 'Open' : 'Closed'}
                   </Badge>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <MapPin className="w-4 h-4" />
-                  <span>{place.address}</span>
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
+                  <MapPin className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                  <span className="truncate">{place.address}</span>
                 </div>
               </div>
               
-              <div className="flex flex-col gap-2">
+              <div className="flex sm:flex-col gap-1 sm:gap-2 flex-shrink-0">
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => setIsFavorite(!isFavorite)}
+                  className="h-8 w-8 sm:h-10 sm:w-10"
                 >
-                  <Heart className={`w-5 h-5 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-500'}`} />
+                  <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-500'}`} />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={onShare}>
-                  <Share2 className="w-4 h-4" />
+                <Button variant="ghost" size="icon" onClick={onShare} className="h-8 w-8 sm:h-10 sm:w-10">
+                  <Share2 className="w-3 h-3 sm:w-4 sm:h-4" />
                 </Button>
               </div>
             </div>
           </SheetHeader>
 
           {/* Photos */}
-          <div className="flex-shrink-0 px-6 py-4">
-            <div className="flex gap-3 overflow-x-auto pb-2">
+          <div className="flex-shrink-0 px-3 sm:px-6 py-3 sm:py-4">
+            <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 hide-scrollbar">
               {[...Array(5)].map((_, i) => (
                 <div
                   key={i}
-                  className="relative w-24 h-24 bg-gray-200 rounded-lg flex-shrink-0 overflow-hidden"
+                  className="relative w-20 h-20 sm:w-24 sm:h-24 bg-gray-200 rounded-lg flex-shrink-0 overflow-hidden"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
-                    <Camera className="w-6 h-6 text-gray-400" />
+                    <Camera className="w-4 h-4 sm:w-6 sm:h-6 text-gray-400" />
                   </div>
                   {i === 4 && (
                     <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
@@ -183,15 +184,15 @@ export function PlaceDetailsSheet({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex-shrink-0 px-6 pb-4">
-            <div className="grid grid-cols-2 gap-3">
-              <Button onClick={onNavigate} className="flex items-center gap-2">
-                <Navigation className="w-4 h-4" />
-                Directions
+          <div className="flex-shrink-0 px-3 sm:px-6 pb-3 sm:pb-4">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+              <Button onClick={onNavigate} className="flex items-center gap-2 touch-manipulation">
+                <Navigation className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="text-sm sm:text-base">Directions</span>
               </Button>
-              <Button variant="outline" className="flex items-center gap-2">
-                <Phone className="w-4 h-4" />
-                Call
+              <Button variant="outline" className="flex items-center gap-2 touch-manipulation">
+                <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="text-sm sm:text-base">Call</span>
               </Button>
             </div>
           </div>

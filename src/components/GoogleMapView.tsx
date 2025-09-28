@@ -14,6 +14,7 @@ import { DirectionsDebugger } from '../utils/directionsDebugger';
 import { useLocation } from '../contexts/LocationContext';
 import { RouteInfoPanel } from './RouteInfoPanel';
 import { LocationSelectedNotification } from './LocationSelectedNotification';
+import { NavigationMenu } from './NavigationMenu';
 import { Switch } from './ui/switch';
 import { Label } from './ui/label';
 import { voiceNavigationService } from '../services/voiceNavigationService';
@@ -21,7 +22,6 @@ import { Volume2, VolumeX, RefreshCw, Navigation2, AlertTriangle as Warning } fr
 import { geolocationService } from '../services/geolocationService';
 import { realtimeNavigationService, NavigationState, RouteDeviation } from '../services/realtimeNavigationService';
 import { DirectionalTransportIcon } from './DirectionalTransportIcon';
-
 interface Location {
   id: string;
   name: string;
@@ -288,9 +288,7 @@ export function GoogleMapView({
           transit: '🚌'
         }[transportMode as string] || '📍';
         
-        if (currentLocation) {
-          toast.success(`${modeEmoji} Route to ${locationName} calculated!`);
-        }
+        // Route calculated silently
       }).catch(error => {
         logger.warn('Failed to get address:', error);
       });
@@ -471,7 +469,7 @@ export function GoogleMapView({
               }, 100);
             });
             
-            logger.info(`Alternative route ${index + 1} displayed`);
+            // Alternative route displayed silently
           });
           
           // Store alternative renderers for cleanup later
@@ -496,10 +494,7 @@ export function GoogleMapView({
         const route = directionsResult.routes[0];
         const leg = route.legs[0];
         
-        toast.success(
-          `Route calculated: ${leg.distance?.text} in ${leg.duration?.text}`,
-          { duration: 5000 }
-        );
+        // Avoid toast spam; the LocationSelectedNotification shows summary
         
         // Start navigation tracking if navigating
         if (isNavigating) {
@@ -672,7 +667,7 @@ export function GoogleMapView({
     // Extra bottom padding for route info panel
     map.fitBounds(bounds, { top: 50, right: 50, bottom: 200, left: 50 });
     
-    logger.info('Primary route displayed successfully');
+    // Primary route displayed silently
   };
 
   // Clear current route
@@ -705,11 +700,11 @@ export function GoogleMapView({
     setShowRouteOptions(false);
     setCurrentDirectionsResult(null);
     setShowRoutePanel(false);
-    toast.info('Route cleared');
+    // Route cleared silently
   };
 
   // Load nearby places based on current map center
-  const loadNearbyPlaces = async () => {
+  const loadNearbyPlaces = async (showToast: boolean = false) => {
     if (!map) return;
     
     setIsLoadingPlaces(true);
@@ -727,32 +722,39 @@ export function GoogleMapView({
     const newMarkers: google.maps.Marker[] = [];
     const placesService = new google.maps.places.PlacesService(map);
     
-    // Define place types to search for
+    // Define place types to search for - only include enabled categories
     const placeSearches = [];
     
     if (showNearbyPlaces.restaurants) {
-      placeSearches.push({ type: 'restaurant', icon: '🍽️', color: '#EF4444' });
-      placeSearches.push({ type: 'cafe', icon: '☕', color: '#8B4513' });
+      placeSearches.push({ type: 'restaurant', icon: '🍽️', color: '#EF4444', category: 'restaurants' });
+      placeSearches.push({ type: 'cafe', icon: '☕', color: '#8B4513', category: 'restaurants' });
     }
     
     if (showNearbyPlaces.atms) {
-      placeSearches.push({ type: 'atm', icon: '💳', color: '#10B981' });
-      placeSearches.push({ type: 'bank', icon: '🏦', color: '#3B82F6' });
+      placeSearches.push({ type: 'atm', icon: '💳', color: '#10B981', category: 'atms' });
+      placeSearches.push({ type: 'bank', icon: '🏦', color: '#3B82F6', category: 'atms' });
     }
     
     if (showNearbyPlaces.landmarks) {
-      placeSearches.push({ type: 'tourist_attraction', icon: '🏛️', color: '#8B5CF6' });
-      placeSearches.push({ type: 'museum', icon: '🏛️', color: '#8B5CF6' });
-      placeSearches.push({ type: 'park', icon: '🌳', color: '#22C55E' });
+      placeSearches.push({ type: 'tourist_attraction', icon: '🏛️', color: '#8B5CF6', category: 'landmarks' });
+      placeSearches.push({ type: 'museum', icon: '🏛️', color: '#8B5CF6', category: 'landmarks' });
+      placeSearches.push({ type: 'park', icon: '🌳', color: '#22C55E', category: 'landmarks' });
     }
     
     if (showNearbyPlaces.services) {
-      placeSearches.push({ type: 'gas_station', icon: '⛽', color: '#F59E0B' });
-      placeSearches.push({ type: 'pharmacy', icon: '💊', color: '#EC4899' });
+      placeSearches.push({ type: 'gas_station', icon: '⛽', color: '#F59E0B', category: 'services' });
+      placeSearches.push({ type: 'pharmacy', icon: '💊', color: '#EC4899', category: 'services' });
     }
     
     if (showNearbyPlaces.parking) {
-      placeSearches.push({ type: 'parking', icon: '🅿️', color: '#1E40AF' });
+      placeSearches.push({ type: 'parking', icon: '🅿️', color: '#1E40AF', category: 'parking' });
+    }
+    
+    // If no categories are enabled, don't search for anything
+    if (placeSearches.length === 0) {
+      setIsLoadingPlaces(false);
+      logger.info('No place categories enabled, skipping search');
+      return;
     }
     
     // Load places for each type
@@ -796,6 +798,9 @@ export function GoogleMapView({
             zIndex: 50
           });
           
+          // Store category info on the marker for filtering
+          (marker as any).placeCategory = placeSearch.category;
+          
           // Add click listener to show place details
           marker.addListener('click', () => {
             const infoWindow = new google.maps.InfoWindow({
@@ -824,32 +829,37 @@ export function GoogleMapView({
     setNearbyPlaceMarkers(newMarkers);
     setIsLoadingPlaces(false);
     
-    if (newMarkers.length > 0) {
-      toast.success(`Found ${newMarkers.length} nearby places`, { duration: 2000 });
-    }
+    // Nearby places found silently
   };
 
-  // Start real-time navigation tracking
+  // Update marker visibility based on toggle states
+  const updateMarkerVisibility = () => {
+    nearbyPlaceMarkers.forEach(marker => {
+      const category = (marker as any).placeCategory;
+      if (category && showNearbyPlaces[category as keyof typeof showNearbyPlaces]) {
+        marker.setMap(map);
+      } else {
+        marker.setMap(null);
+      }
+    });
+  };
+
+  // Legacy navigation tracking (for compatibility only - voice handled by real-time navigation)
   const startNavigationTracking = (directionsResult: google.maps.DirectionsResult) => {
     if (!directionsResult.routes?.[0]?.legs?.[0]) return;
     
     const route = directionsResult.routes[0];
     const leg = route.legs[0];
     
-    // Announce navigation start
-    if (isVoiceEnabled) {
-      voiceNavigationService.announceStart(
-        leg.distance?.text || '',
-        leg.duration?.text || ''
-      );
-    }
+    // NO VOICE ANNOUNCEMENTS HERE - handled by real-time navigation system
+    logger.info('Legacy navigation tracking started (display only)');
     
     // Clear any existing tracking
     if (navigationIntervalRef.current) {
       clearInterval(navigationIntervalRef.current);
     }
     
-    // Track user position every second
+    // Track user position every second for display purposes only
     navigationIntervalRef.current = setInterval(() => {
       if (!currentLocation || !leg.steps) return;
       
@@ -873,8 +883,7 @@ export function GoogleMapView({
       
       setCurrentStepIndex(closestStepIndex);
       
-      // Get next turn info
-      const currentStep = leg.steps[closestStepIndex];
+      // Get next turn info for display only
       const nextStep = leg.steps[closestStepIndex + 1];
       
       if (nextStep && nextStep.start_location) {
@@ -885,14 +894,7 @@ export function GoogleMapView({
         
         setDistanceToNextTurn(Math.round(distanceToTurn));
         
-        // Voice announcements for turns
-        if (isVoiceEnabled && nextStep.instructions) {
-          voiceNavigationService.announceTurn(
-            nextStep.instructions,
-            distanceToTurn,
-            nextStep.maneuver
-          );
-        }
+        // NO VOICE ANNOUNCEMENTS - handled by real-time navigation system
       }
       
       // Check if arrived at destination
@@ -903,10 +905,8 @@ export function GoogleMapView({
         );
         
         if (distanceToDestination < 50) {
-          // Arrived at destination
-          if (isVoiceEnabled) {
-            voiceNavigationService.announceArrival();
-          }
+          // Arrived at destination - no voice here
+          logger.info('Destination reached (legacy tracker)');
           
           // Stop tracking
           if (navigationIntervalRef.current) {
@@ -974,7 +974,7 @@ export function GoogleMapView({
           center: initialCenter,
           mapTypeId: mapStyle,
           disableDefaultUI: false,
-          zoomControl: true,
+          zoomControl: false,
           mapTypeControl: false,
           scaleControl: true,
           streetViewControl: true,
@@ -984,6 +984,8 @@ export function GoogleMapView({
 
         if (googleMap) {
           setMap(googleMap);
+          // Ensure default zoom controls are hidden even if options change later
+          googleMap.setOptions({ zoomControl: false });
           
           // Initialize traffic layer
           const traffic = new google.maps.TrafficLayer();
@@ -1296,13 +1298,21 @@ export function GoogleMapView({
     calculateRouteToLocation(currentLocation, selectedLocation);
   }, [map, selectedLocation, currentLocation, transportMode]);
 
-  // Load nearby places when map is ready or when toggles change
+  // Load nearby places when map is ready
   useEffect(() => {
     if (!map) return;
     
-    // Load places when map is ready or toggles change
+    // Load places when map is ready
     loadNearbyPlaces();
-  }, [map, showNearbyPlaces]);
+  }, [map]);
+  
+  // Update marker visibility when toggles change
+  useEffect(() => {
+    if (!map || nearbyPlaceMarkers.length === 0) return;
+    
+    // Update visibility of existing markers
+    updateMarkerVisibility();
+  }, [showNearbyPlaces, nearbyPlaceMarkers, map]);
   
   // Reload places when map center changes significantly (after dragging)
   useEffect(() => {
@@ -1395,7 +1405,7 @@ export function GoogleMapView({
     map.setMapTypeId(nextStyle);
     setMapStyle(nextStyle);
     
-    toast.success(`Map style: ${nextStyle}`);
+    // Map style changed silently
   }, [map, mapStyle]);
 
   // Toggle traffic layer
@@ -1409,7 +1419,7 @@ export function GoogleMapView({
     }
     
     setIsTrafficEnabled(!isTrafficEnabled);
-    toast.success(`Traffic ${!isTrafficEnabled ? 'enabled' : 'disabled'}`);
+    // Traffic toggled silently
   }, [map, isTrafficEnabled]);
 
   // Zoom controls
@@ -1457,7 +1467,7 @@ export function GoogleMapView({
       }
 
       toast.dismiss(loadingToast);
-      toast.success(`📍 Got your location in Addis Ababa! Accuracy: ±${Math.round(position.accuracy)}m`);
+      // Location found silently
       
       logger.info('Real location found:', position);
     } catch (error) {
@@ -1532,9 +1542,7 @@ export function GoogleMapView({
             voiceNavigationService.announceAlternativeRoute(routes);
           }
           
-          toast.success(`Found ${routes.length} alternative routes`, {
-            description: 'Tap to switch to a different route'
-          });
+          // Alternative routes found silently
         },
         
         onBackOnRoute: () => {
@@ -1545,7 +1553,7 @@ export function GoogleMapView({
             voiceNavigationService.announceBackOnRoute();
           }
           
-          toast.success('✅ Back on route!');
+          // Back on route silently
         }
       });
       
@@ -1738,6 +1746,15 @@ export function GoogleMapView({
 
       {/* Map Controls */}
       <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
+        {/* Main Menu (Sheet trigger) */}
+        <NavigationMenu
+          onNavigateToPage={(route) => {
+            toast.info(`Open page: ${route}`);
+          }}
+          onNavigateToScreen={(screen) => {
+            toast.info(`Open screen: ${screen}`);
+          }}
+        />
         {/* Nearby Places Controls */}
         <Popover>
           <PopoverTrigger asChild>
@@ -1761,7 +1778,7 @@ export function GoogleMapView({
                   <Switch
                     id="restaurants"
                     checked={showNearbyPlaces.restaurants}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={(checked: boolean) => {
                       setShowNearbyPlaces(prev => ({ ...prev, restaurants: checked }));
                     }}
                   />
@@ -1775,7 +1792,7 @@ export function GoogleMapView({
                   <Switch
                     id="atms"
                     checked={showNearbyPlaces.atms}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={(checked: boolean) => {
                       setShowNearbyPlaces(prev => ({ ...prev, atms: checked }));
                     }}
                   />
@@ -1789,7 +1806,7 @@ export function GoogleMapView({
                   <Switch
                     id="landmarks"
                     checked={showNearbyPlaces.landmarks}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={(checked: boolean) => {
                       setShowNearbyPlaces(prev => ({ ...prev, landmarks: checked }));
                     }}
                   />
@@ -1803,7 +1820,7 @@ export function GoogleMapView({
                   <Switch
                     id="services"
                     checked={showNearbyPlaces.services}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={(checked: boolean) => {
                       setShowNearbyPlaces(prev => ({ ...prev, services: checked }));
                     }}
                   />
@@ -1817,7 +1834,7 @@ export function GoogleMapView({
                   <Switch
                     id="parking"
                     checked={showNearbyPlaces.parking}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={(checked: boolean) => {
                       setShowNearbyPlaces(prev => ({ ...prev, parking: checked }));
                     }}
                   />
@@ -1835,7 +1852,7 @@ export function GoogleMapView({
                 size="sm"
                 variant="outline"
                 className="w-full"
-                onClick={loadNearbyPlaces}
+                onClick={() => loadNearbyPlaces(true)}
               >
                 Refresh Places
               </Button>
