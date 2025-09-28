@@ -1,0 +1,429 @@
+{
+  message: 'Prisma client initialized',
+  level: 'info',
+  timestamp: '2025-09-26 20:08:54'
+}
+{
+  message: 'Sentry integration temporarily disabled',
+  level: 'info',
+  timestamp: '2025-09-26 20:08:54'
+}
+{
+  google: true,
+  apple: true,
+  level: 'info',
+  message: 'OAuth strategies initialized',
+  timestamp: '2025-09-26 20:08:54'
+}
+{
+  name: 'PrismaClientInitializationError',
+  clientVersion: '5.22.0',
+  errorCode: 'P1012',
+  level: 'error',
+  message: 'Database initialization failed: \x1B[1;91merror\x1B[0m: \x1B[1mError validating datasource `db`: the URL must start with the protocol `file:`.\x1B[0m\n' +
+    '  \x1B[1;94m-->\x1B[0m  \x1B[4mschema.prisma:8\x1B[0m\n' +
+    '\x1B[1;94m   | \x1B[0m\n' +
+    '\x1B[1;94m 7 | \x1B[0m  provider = "sqlite"\n' +
+    '\x1B[1;94m 8 | \x1B[0m  url      = \x1B[1;91m"file:./dev.db"\x1B[0m\n' +
+    '\x1B[1;94m   | \x1B[0m\n' +
+    '\n' +
+    'Validation Error Count: 1',
+  stack: 'PrismaClientInitializationError: \x1B[1;91merror\x1B[0m: \x1B[1mError validating datasource `db`: the URL must start with the protocol `file:`.\x1B[0m\n' +
+    '  \x1B[1;94m-->\x1B[0m  \x1B[4mschema.prisma:8\x1B[0m\n' +
+    '\x1B[1;94m   | \x1B[0m\n' +
+    '\x1B[1;94m 7 | \x1B[0m  provider = "sqlite"\n' +
+    '\x1B[1;94m 8 | \x1B[0m  url      = \x1B[1;91m"file:./dev.db"\x1B[0m\n' +
+    '\x1B[1;94m   | \x1B[0m\n' +
+    '\n' +
+    'Validation Error Count: 1\n' +
+    '    at t (/Users/munir011/Documents/comtion/backend/node_modules/@prisma/client/runtime/library.js:112:2488)\n' +
+    '    at async initializeDatabases (/Users/munir011/Documents/comtion/backend/src/config/database.ts:120:5)\n' +
+    '    at async startServer (/Users/munir011/Documents/comtion/backend/src/index.ts:12:5)',
+  timestamp: '2025-09-26 20:08:55'
+}
+{
+  message: 'Prisma client initialized',
+  level: 'info',
+  timestamp: '2025-09-26 20:09:09'
+}
+{
+  message: 'Sentry integration temporarily disabled',
+  level: 'info',
+  timestamp: '2025-09-26 20:09:09'
+}
+{
+  google: true,
+  apple: true,
+  level: 'info',
+  message: 'OAuth strategies initialized',
+  timestamp: '2025-09-26 20:09:09'
+}
+{
+  message: 'PostgreSQL connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 20:09:09'
+}
+{
+  message: 'Redis client connected',
+  level: 'info',
+  timestamp: '2025-09-26 20:09:09'
+}
+{
+  message: 'Redis client ready',
+  level: 'info',
+  timestamp: '2025-09-26 20:09:09'
+}
+{
+  message: 'Redis connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 20:09:09'
+}
+{
+  message: 'Database connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 20:09:09'
+}
+{
+  message: 'Redis client connected',
+  level: 'info',
+  timestamp: '2025-09-26 20:09:09'
+}
+{
+  message: 'Redis client ready',
+  level: 'info',
+  timestamp: '2025-09-26 20:09:09'
+}
+{
+  message: 'Redis connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 20:09:09'
+}
+{
+  message: 'Redis connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 20:09:09'
+}
+{
+  message: 'WebSocket service initialized',
+  level: 'info',
+  timestamp: '2025-09-26 20:09:09'
+}
+{
+  environment: 'development',
+  port: 8000,
+  endpoints: {
+    api: 'http://localhost:8000/api/v1',
+    health: 'http://localhost:8000/health',
+    docs: 'http://localhost:8000/api/v1'
+  },
+  level: 'info',
+  message: '🚀 Server running on port 8000',
+  timestamp: '2025-09-26 20:09:09'
+}
+{
+  message: 'Prisma client initialized',
+  level: 'info',
+  timestamp: '2025-09-26 22:59:37'
+}
+{
+  message: 'Sentry integration temporarily disabled',
+  level: 'info',
+  timestamp: '2025-09-26 22:59:38'
+}
+{
+  google: true,
+  apple: true,
+  level: 'info',
+  message: 'OAuth strategies initialized',
+  timestamp: '2025-09-26 22:59:38'
+}
+{
+  message: 'PostgreSQL connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 22:59:41'
+}
+{
+  message: 'Redis client connected',
+  level: 'info',
+  timestamp: '2025-09-26 22:59:41'
+}
+{
+  message: 'Redis client ready',
+  level: 'info',
+  timestamp: '2025-09-26 22:59:41'
+}
+{
+  message: 'Redis connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 22:59:41'
+}
+{
+  message: 'Database connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 22:59:41'
+}
+{
+  message: 'Redis client connected',
+  level: 'info',
+  timestamp: '2025-09-26 22:59:41'
+}
+{
+  message: 'Redis client ready',
+  level: 'info',
+  timestamp: '2025-09-26 22:59:41'
+}
+{
+  message: 'Redis connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 22:59:41'
+}
+{
+  message: 'Redis connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 22:59:41'
+}
+{
+  message: 'WebSocket service initialized',
+  level: 'info',
+  timestamp: '2025-09-26 22:59:41'
+}
+{
+  message: 'Received SIGTERM. Starting graceful shutdown...',
+  level: 'info',
+  timestamp: '2025-09-26 23:07:26'
+}
+{
+  message: 'Prisma client initialized',
+  level: 'info',
+  timestamp: '2025-09-26 23:07:28'
+}
+{
+  message: 'Sentry integration temporarily disabled',
+  level: 'info',
+  timestamp: '2025-09-26 23:07:29'
+}
+{
+  google: true,
+  apple: true,
+  level: 'info',
+  message: 'OAuth strategies initialized',
+  timestamp: '2025-09-26 23:07:29'
+}
+{
+  message: 'PostgreSQL connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 23:07:30'
+}
+{
+  message: 'Redis client connected',
+  level: 'info',
+  timestamp: '2025-09-26 23:07:30'
+}
+{
+  message: 'Redis client ready',
+  level: 'info',
+  timestamp: '2025-09-26 23:07:30'
+}
+{
+  message: 'Redis connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 23:07:30'
+}
+{
+  message: 'Database connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 23:07:30'
+}
+{
+  message: 'Redis client connected',
+  level: 'info',
+  timestamp: '2025-09-26 23:07:30'
+}
+{
+  message: 'Redis client ready',
+  level: 'info',
+  timestamp: '2025-09-26 23:07:30'
+}
+{
+  message: 'Redis connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 23:07:30'
+}
+{
+  message: 'Redis connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 23:07:30'
+}
+{
+  message: 'WebSocket service initialized',
+  level: 'info',
+  timestamp: '2025-09-26 23:07:30'
+}
+{
+  environment: 'development',
+  port: 8000,
+  endpoints: {
+    api: 'http://localhost:8000/api/v1',
+    health: 'http://localhost:8000/health',
+    docs: 'http://localhost:8000/api/v1'
+  },
+  level: 'info',
+  message: '🚀 Server running on port 8000',
+  timestamp: '2025-09-26 23:07:30'
+}
+{
+  message: 'Prisma client initialized',
+  level: 'info',
+  timestamp: '2025-09-26 23:08:15'
+}
+{
+  message: 'Sentry integration temporarily disabled',
+  level: 'info',
+  timestamp: '2025-09-26 23:08:16'
+}
+{
+  google: true,
+  apple: true,
+  level: 'info',
+  message: 'OAuth strategies initialized',
+  timestamp: '2025-09-26 23:08:16'
+}
+{
+  message: 'PostgreSQL connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 23:08:16'
+}
+{
+  message: 'Redis client connected',
+  level: 'info',
+  timestamp: '2025-09-26 23:08:16'
+}
+{
+  message: 'Redis client ready',
+  level: 'info',
+  timestamp: '2025-09-26 23:08:16'
+}
+{
+  message: 'Redis connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 23:08:16'
+}
+{
+  message: 'Database connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 23:08:16'
+}
+{
+  message: 'Redis client connected',
+  level: 'info',
+  timestamp: '2025-09-26 23:08:16'
+}
+{
+  message: 'Redis client ready',
+  level: 'info',
+  timestamp: '2025-09-26 23:08:16'
+}
+{
+  message: 'Redis connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 23:08:16'
+}
+{
+  message: 'Redis connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 23:08:16'
+}
+{
+  message: 'WebSocket service initialized',
+  level: 'info',
+  timestamp: '2025-09-26 23:08:16'
+}
+{
+  message: 'Received SIGTERM. Starting graceful shutdown...',
+  level: 'info',
+  timestamp: '2025-09-26 23:08:16'
+}
+{
+  message: 'Received SIGTERM. Starting graceful shutdown...',
+  level: 'info',
+  timestamp: '2025-09-26 23:11:43'
+}
+{
+  message: 'Prisma client initialized',
+  level: 'info',
+  timestamp: '2025-09-26 23:13:31'
+}
+{
+  message: 'Sentry integration temporarily disabled',
+  level: 'info',
+  timestamp: '2025-09-26 23:13:32'
+}
+{
+  google: true,
+  apple: true,
+  level: 'info',
+  message: 'OAuth strategies initialized',
+  timestamp: '2025-09-26 23:13:32'
+}
+{
+  message: 'PostgreSQL connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 23:13:32'
+}
+{
+  message: 'Redis client connected',
+  level: 'info',
+  timestamp: '2025-09-26 23:13:32'
+}
+{
+  message: 'Redis client ready',
+  level: 'info',
+  timestamp: '2025-09-26 23:13:32'
+}
+{
+  message: 'Redis connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 23:13:32'
+}
+{
+  message: 'Database connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 23:13:32'
+}
+{
+  message: 'Redis client connected',
+  level: 'info',
+  timestamp: '2025-09-26 23:13:32'
+}
+{
+  message: 'Redis client ready',
+  level: 'info',
+  timestamp: '2025-09-26 23:13:32'
+}
+{
+  message: 'Redis connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 23:13:32'
+}
+{
+  message: 'Redis connected successfully',
+  level: 'info',
+  timestamp: '2025-09-26 23:13:32'
+}
+{
+  message: 'WebSocket service initialized',
+  level: 'info',
+  timestamp: '2025-09-26 23:13:32'
+}
+{
+  environment: 'development',
+  port: 8000,
+  endpoints: {
+    api: 'http://localhost:8000/api/v1',
+    health: 'http://localhost:8000/health',
+    docs: 'http://localhost:8000/api/v1'
+  },
+  level: 'info',
+  message: '🚀 Server running on port 8000',
+  timestamp: '2025-09-26 23:13:32'
+}

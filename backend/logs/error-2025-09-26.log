@@ -1,0 +1,26 @@
+{
+  name: 'PrismaClientInitializationError',
+  clientVersion: '5.22.0',
+  errorCode: 'P1012',
+  level: 'error',
+  message: 'Database initialization failed: \x1B[1;91merror\x1B[0m: \x1B[1mError validating datasource `db`: the URL must start with the protocol `file:`.\x1B[0m\n' +
+    '  \x1B[1;94m-->\x1B[0m  \x1B[4mschema.prisma:8\x1B[0m\n' +
+    '\x1B[1;94m   | \x1B[0m\n' +
+    '\x1B[1;94m 7 | \x1B[0m  provider = "sqlite"\n' +
+    '\x1B[1;94m 8 | \x1B[0m  url      = \x1B[1;91m"file:./dev.db"\x1B[0m\n' +
+    '\x1B[1;94m   | \x1B[0m\n' +
+    '\n' +
+    'Validation Error Count: 1',
+  stack: 'PrismaClientInitializationError: \x1B[1;91merror\x1B[0m: \x1B[1mError validating datasource `db`: the URL must start with the protocol `file:`.\x1B[0m\n' +
+    '  \x1B[1;94m-->\x1B[0m  \x1B[4mschema.prisma:8\x1B[0m\n' +
+    '\x1B[1;94m   | \x1B[0m\n' +
+    '\x1B[1;94m 7 | \x1B[0m  provider = "sqlite"\n' +
+    '\x1B[1;94m 8 | \x1B[0m  url      = \x1B[1;91m"file:./dev.db"\x1B[0m\n' +
+    '\x1B[1;94m   | \x1B[0m\n' +
+    '\n' +
+    'Validation Error Count: 1\n' +
+    '    at t (/Users/munir011/Documents/comtion/backend/node_modules/@prisma/client/runtime/library.js:112:2488)\n' +
+    '    at async initializeDatabases (/Users/munir011/Documents/comtion/backend/src/config/database.ts:120:5)\n' +
+    '    at async startServer (/Users/munir011/Documents/comtion/backend/src/index.ts:12:5)',
+  timestamp: '2025-09-26 20:08:55'
+}

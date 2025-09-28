@@ -1,0 +1,403 @@
+
+> Complete Navigation App Plan@0.1.0 dev
+> vite
+
+
+  VITE v6.3.5  ready in 664 ms
+
+  ➜  Local:   http://localhost:3000/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help
+5:00:05 PM [vite] vite.config.ts changed, restarting server...
+5:00:05 PM [vite] server restarted.
+5:02:24 PM [vite] (client) hmr update /src/App.tsx
+5:02:34 PM [vite] (client) hmr update /src/App.tsx
+5:02:46 PM [vite] (client) hmr update /src/App.tsx
+5:02:46 PM [vite] (client) Pre-transform error: Failed to resolve import "react-native" from "src/pages/HomePage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/HomePage.tsx:21:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect, useRef } from 'react';
+  28 |  import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Dimensions } from 'react-native';
+     |                                                                                                                                             ^
+  29 |  import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+  30 |  import { useNavigation } from '@react-navigation/native';
+5:02:46 PM [vite] (client) Pre-transform error: Failed to resolve import "react-native" from "src/pages/ReachabilityPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/ReachabilityPage.tsx:19:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect, useRef } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, ScrollView, Dimensions, Platform } from 'react-native';
+     |                                                                                                                        ^
+  29 |  import MapView, { Marker, Polygon, PROVIDER_GOOGLE } from 'react-native-maps';
+  30 |  import { useRoute, useNavigation } from '@react-navigation/native';
+5:02:46 PM [vite] (client) Pre-transform error: Failed to resolve import "react-native" from "src/pages/PlaceDetailsPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/PlaceDetailsPage.tsx:20:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Platform, Share } from 'react-native';
+     |                                                                                                                   ^
+  29 |  import { useRoute, useNavigation } from '@react-navigation/native';
+  30 |  import { Ionicons } from '@expo/vector-icons';
+5:02:46 PM [vite] (client) Pre-transform error: Failed to resolve import "react-native" from "src/pages/SearchResultsPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/SearchResultsPage.tsx:20:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect, useRef } from 'react';
+  28 |  import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, Alert, ActivityIndicator, Platform, Keyboard } from 'react-native';
+     |                                                                                                                               ^
+  29 |  import { useRoute, useNavigation } from '@react-navigation/native';
+  30 |  import { Ionicons } from '@expo/vector-icons';
+5:02:46 PM [vite] (client) Pre-transform error: Failed to resolve import "react-native" from "src/pages/RouteOptionsPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/RouteOptionsPage.tsx:19:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Platform, Switch } from 'react-native';
+     |                                                                                                                    ^
+  29 |  import { useRoute, useNavigation } from '@react-navigation/native';
+  30 |  import { Ionicons } from '@expo/vector-icons';
+5:02:46 PM [vite] (client) Pre-transform error: Failed to resolve import "react-native" from "src/pages/NavigationPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/NavigationPage.tsx:20:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect, useRef, useCallback } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform, Dimensions, AppState } from 'react-native';
+     |                                                                                                                      ^
+  29 |  import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+  30 |  import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
+5:02:46 PM [vite] (client) Pre-transform error: Failed to resolve import "react-native" from "src/pages/SettingsPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/SettingsPage.tsx:19:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Switch, Platform, ActivityIndicator } from 'react-native';
+     |                                                                                                                    ^
+  29 |  import { useNavigation } from '@react-navigation/native';
+  30 |  import { Ionicons } from '@expo/vector-icons';
+5:02:46 PM [vite] Internal server error: Failed to resolve import "react-native" from "src/pages/HomePage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/HomePage.tsx:21:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect, useRef } from 'react';
+  28 |  import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Dimensions } from 'react-native';
+     |                                                                                                                                             ^
+  29 |  import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+  30 |  import { useNavigation } from '@react-navigation/native';
+      at TransformPluginContext._formatLog (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42499:41)
+      at TransformPluginContext.error (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42496:16)
+      at normalizeUrl (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40475:23)
+      at async file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40594:37
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40521:7)
+      at async EnvironmentPluginContainer.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42294:18)
+      at async loadAndTransform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:35735:27)
+      at async viteTransformMiddleware (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:37250:24)
+5:02:46 PM [vite] Internal server error: Failed to resolve import "react-native" from "src/pages/ReachabilityPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/ReachabilityPage.tsx:19:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect, useRef } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, ScrollView, Dimensions, Platform } from 'react-native';
+     |                                                                                                                        ^
+  29 |  import MapView, { Marker, Polygon, PROVIDER_GOOGLE } from 'react-native-maps';
+  30 |  import { useRoute, useNavigation } from '@react-navigation/native';
+      at TransformPluginContext._formatLog (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42499:41)
+      at TransformPluginContext.error (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42496:16)
+      at normalizeUrl (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40475:23)
+      at async file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40594:37
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40521:7)
+      at async EnvironmentPluginContainer.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42294:18)
+      at async loadAndTransform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:35735:27)
+      at async viteTransformMiddleware (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:37250:24)
+5:02:46 PM [vite] Internal server error: Failed to resolve import "react-native" from "src/pages/NavigationPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/NavigationPage.tsx:20:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect, useRef, useCallback } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform, Dimensions, AppState } from 'react-native';
+     |                                                                                                                      ^
+  29 |  import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+  30 |  import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
+      at TransformPluginContext._formatLog (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42499:41)
+      at TransformPluginContext.error (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42496:16)
+      at normalizeUrl (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40475:23)
+      at async file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40594:37
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40521:7)
+      at async EnvironmentPluginContainer.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42294:18)
+      at async loadAndTransform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:35735:27)
+      at async viteTransformMiddleware (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:37250:24)
+5:02:46 PM [vite] Internal server error: Failed to resolve import "react-native" from "src/pages/PlaceDetailsPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/PlaceDetailsPage.tsx:20:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Platform, Share } from 'react-native';
+     |                                                                                                                   ^
+  29 |  import { useRoute, useNavigation } from '@react-navigation/native';
+  30 |  import { Ionicons } from '@expo/vector-icons';
+      at TransformPluginContext._formatLog (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42499:41)
+      at TransformPluginContext.error (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42496:16)
+      at normalizeUrl (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40475:23)
+      at async file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40594:37
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40521:7)
+      at async EnvironmentPluginContainer.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42294:18)
+      at async loadAndTransform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:35735:27)
+      at async viteTransformMiddleware (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:37250:24)
+5:02:46 PM [vite] Internal server error: Failed to resolve import "react-native" from "src/pages/SearchResultsPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/SearchResultsPage.tsx:20:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect, useRef } from 'react';
+  28 |  import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, Alert, ActivityIndicator, Platform, Keyboard } from 'react-native';
+     |                                                                                                                               ^
+  29 |  import { useRoute, useNavigation } from '@react-navigation/native';
+  30 |  import { Ionicons } from '@expo/vector-icons';
+      at TransformPluginContext._formatLog (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42499:41)
+      at TransformPluginContext.error (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42496:16)
+      at normalizeUrl (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40475:23)
+      at async file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40594:37
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40521:7)
+      at async EnvironmentPluginContainer.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42294:18)
+      at async loadAndTransform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:35735:27)
+      at async viteTransformMiddleware (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:37250:24)
+5:02:46 PM [vite] Internal server error: Failed to resolve import "react-native" from "src/pages/RouteOptionsPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/RouteOptionsPage.tsx:19:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Platform, Switch } from 'react-native';
+     |                                                                                                                    ^
+  29 |  import { useRoute, useNavigation } from '@react-navigation/native';
+  30 |  import { Ionicons } from '@expo/vector-icons';
+      at TransformPluginContext._formatLog (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42499:41)
+      at TransformPluginContext.error (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42496:16)
+      at normalizeUrl (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40475:23)
+      at async file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40594:37
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40521:7)
+      at async EnvironmentPluginContainer.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42294:18)
+      at async loadAndTransform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:35735:27)
+      at async viteTransformMiddleware (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:37250:24)
+5:02:46 PM [vite] Internal server error: Failed to resolve import "react-native" from "src/pages/SettingsPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/SettingsPage.tsx:19:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Switch, Platform, ActivityIndicator } from 'react-native';
+     |                                                                                                                    ^
+  29 |  import { useNavigation } from '@react-navigation/native';
+  30 |  import { Ionicons } from '@expo/vector-icons';
+      at TransformPluginContext._formatLog (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42499:41)
+      at TransformPluginContext.error (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42496:16)
+      at normalizeUrl (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40475:23)
+      at async file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40594:37
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40521:7)
+      at async EnvironmentPluginContainer.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42294:18)
+      at async loadAndTransform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:35735:27)
+      at async viteTransformMiddleware (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:37250:24)
+5:02:56 PM [vite] (client) hmr update /src/App.tsx
+5:03:03 PM [vite] (client) hmr update /src/App.tsx
+5:03:18 PM [vite] (client) hmr update /src/App.tsx
+5:03:30 PM [vite] (client) hmr update /src/App.tsx
+5:03:59 PM [vite] (client) hmr update /src/components/AdvancedRouter.tsx
+5:04:27 PM [vite] (client) hmr update /src/App.tsx
+5:04:27 PM [vite] (client) Pre-transform error: Failed to resolve import "react-native" from "src/pages/HomePage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/HomePage.tsx:21:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect, useRef } from 'react';
+  28 |  import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Dimensions } from 'react-native';
+     |                                                                                                                                             ^
+  29 |  import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+  30 |  import { useNavigation } from '@react-navigation/native';
+5:04:27 PM [vite] (client) Pre-transform error: Failed to resolve import "react-native" from "src/pages/ReachabilityPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/ReachabilityPage.tsx:19:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect, useRef } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, ScrollView, Dimensions, Platform } from 'react-native';
+     |                                                                                                                        ^
+  29 |  import MapView, { Marker, Polygon, PROVIDER_GOOGLE } from 'react-native-maps';
+  30 |  import { useRoute, useNavigation } from '@react-navigation/native';
+5:04:27 PM [vite] (client) Pre-transform error: Failed to resolve import "react-native" from "src/pages/PlaceDetailsPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/PlaceDetailsPage.tsx:20:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Platform, Share } from 'react-native';
+     |                                                                                                                   ^
+  29 |  import { useRoute, useNavigation } from '@react-navigation/native';
+  30 |  import { Ionicons } from '@expo/vector-icons';
+5:04:27 PM [vite] (client) Pre-transform error: Failed to resolve import "react-native" from "src/pages/SearchResultsPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/SearchResultsPage.tsx:20:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect, useRef } from 'react';
+  28 |  import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, Alert, ActivityIndicator, Platform, Keyboard } from 'react-native';
+     |                                                                                                                               ^
+  29 |  import { useRoute, useNavigation } from '@react-navigation/native';
+  30 |  import { Ionicons } from '@expo/vector-icons';
+5:04:27 PM [vite] (client) Pre-transform error: Failed to resolve import "react-native" from "src/pages/NavigationPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/NavigationPage.tsx:20:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect, useRef, useCallback } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform, Dimensions, AppState } from 'react-native';
+     |                                                                                                                      ^
+  29 |  import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+  30 |  import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
+5:04:27 PM [vite] (client) Pre-transform error: Failed to resolve import "react-native" from "src/pages/RouteOptionsPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/RouteOptionsPage.tsx:19:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Platform, Switch } from 'react-native';
+     |                                                                                                                    ^
+  29 |  import { useRoute, useNavigation } from '@react-navigation/native';
+  30 |  import { Ionicons } from '@expo/vector-icons';
+5:04:27 PM [vite] (client) Pre-transform error: Failed to resolve import "react-native" from "src/pages/SettingsPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/SettingsPage.tsx:19:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Switch, Platform, ActivityIndicator } from 'react-native';
+     |                                                                                                                    ^
+  29 |  import { useNavigation } from '@react-navigation/native';
+  30 |  import { Ionicons } from '@expo/vector-icons';
+5:04:27 PM [vite] Internal server error: Failed to resolve import "react-native" from "src/pages/HomePage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/HomePage.tsx:21:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect, useRef } from 'react';
+  28 |  import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Dimensions } from 'react-native';
+     |                                                                                                                                             ^
+  29 |  import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+  30 |  import { useNavigation } from '@react-navigation/native';
+      at TransformPluginContext._formatLog (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42499:41)
+      at TransformPluginContext.error (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42496:16)
+      at normalizeUrl (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40475:23)
+      at async file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40594:37
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40521:7)
+      at async EnvironmentPluginContainer.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42294:18)
+      at async loadAndTransform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:35735:27)
+      at async viteTransformMiddleware (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:37250:24)
+5:04:27 PM [vite] Internal server error: Failed to resolve import "react-native" from "src/pages/NavigationPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/NavigationPage.tsx:20:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect, useRef, useCallback } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform, Dimensions, AppState } from 'react-native';
+     |                                                                                                                      ^
+  29 |  import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+  30 |  import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
+      at TransformPluginContext._formatLog (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42499:41)
+      at TransformPluginContext.error (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42496:16)
+      at normalizeUrl (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40475:23)
+      at async file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40594:37
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40521:7)
+      at async EnvironmentPluginContainer.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42294:18)
+      at async loadAndTransform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:35735:27)
+      at async viteTransformMiddleware (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:37250:24)
+5:04:27 PM [vite] Internal server error: Failed to resolve import "react-native" from "src/pages/ReachabilityPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/ReachabilityPage.tsx:19:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect, useRef } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, ScrollView, Dimensions, Platform } from 'react-native';
+     |                                                                                                                        ^
+  29 |  import MapView, { Marker, Polygon, PROVIDER_GOOGLE } from 'react-native-maps';
+  30 |  import { useRoute, useNavigation } from '@react-navigation/native';
+      at TransformPluginContext._formatLog (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42499:41)
+      at TransformPluginContext.error (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42496:16)
+      at normalizeUrl (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40475:23)
+      at async file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40594:37
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40521:7)
+      at async EnvironmentPluginContainer.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42294:18)
+      at async loadAndTransform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:35735:27)
+      at async viteTransformMiddleware (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:37250:24)
+5:04:27 PM [vite] Internal server error: Failed to resolve import "react-native" from "src/pages/PlaceDetailsPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/PlaceDetailsPage.tsx:20:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Platform, Share } from 'react-native';
+     |                                                                                                                   ^
+  29 |  import { useRoute, useNavigation } from '@react-navigation/native';
+  30 |  import { Ionicons } from '@expo/vector-icons';
+      at TransformPluginContext._formatLog (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42499:41)
+      at TransformPluginContext.error (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42496:16)
+      at normalizeUrl (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40475:23)
+      at async file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40594:37
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40521:7)
+      at async EnvironmentPluginContainer.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42294:18)
+      at async loadAndTransform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:35735:27)
+      at async viteTransformMiddleware (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:37250:24)
+5:04:27 PM [vite] Internal server error: Failed to resolve import "react-native" from "src/pages/SearchResultsPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/SearchResultsPage.tsx:20:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect, useRef } from 'react';
+  28 |  import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, Alert, ActivityIndicator, Platform, Keyboard } from 'react-native';
+     |                                                                                                                               ^
+  29 |  import { useRoute, useNavigation } from '@react-navigation/native';
+  30 |  import { Ionicons } from '@expo/vector-icons';
+      at TransformPluginContext._formatLog (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42499:41)
+      at TransformPluginContext.error (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42496:16)
+      at normalizeUrl (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40475:23)
+      at async file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40594:37
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40521:7)
+      at async EnvironmentPluginContainer.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42294:18)
+      at async loadAndTransform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:35735:27)
+      at async viteTransformMiddleware (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:37250:24)
+5:04:27 PM [vite] Internal server error: Failed to resolve import "react-native" from "src/pages/RouteOptionsPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/RouteOptionsPage.tsx:19:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Platform, Switch } from 'react-native';
+     |                                                                                                                    ^
+  29 |  import { useRoute, useNavigation } from '@react-navigation/native';
+  30 |  import { Ionicons } from '@expo/vector-icons';
+      at TransformPluginContext._formatLog (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42499:41)
+      at TransformPluginContext.error (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42496:16)
+      at normalizeUrl (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40475:23)
+      at async file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40594:37
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40521:7)
+      at async EnvironmentPluginContainer.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42294:18)
+      at async loadAndTransform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:35735:27)
+      at async viteTransformMiddleware (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:37250:24)
+5:04:27 PM [vite] Internal server error: Failed to resolve import "react-native" from "src/pages/SettingsPage.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/munir011/Documents/comtion/src/pages/SettingsPage.tsx:19:7
+  26 |  var _s = $RefreshSig$();
+  27 |  import React, { useState, useEffect } from 'react';
+  28 |  import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Switch, Platform, ActivityIndicator } from 'react-native';
+     |                                                                                                                    ^
+  29 |  import { useNavigation } from '@react-navigation/native';
+  30 |  import { Ionicons } from '@expo/vector-icons';
+      at TransformPluginContext._formatLog (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42499:41)
+      at TransformPluginContext.error (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42496:16)
+      at normalizeUrl (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40475:23)
+      at async file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40594:37
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:40521:7)
+      at async EnvironmentPluginContainer.transform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:42294:18)
+      at async loadAndTransform (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:35735:27)
+      at async viteTransformMiddleware (file:///Users/munir011/Documents/comtion/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:37250:24)
+5:04:34 PM [vite] (client) hmr update /src/App.tsx
+5:04:49 PM [vite] (client) hmr update /src/components/SettingsPanel.tsx
+5:05:21 PM [vite] (client) hmr update /src/components/SettingsPanel.tsx
+5:05:31 PM [vite] (client) hmr update /src/App.tsx
