@@ -172,17 +172,17 @@ export function LocationProvider({ children }: LocationProviderProps) {
   useEffect(() => {
     if (import.meta.env.DEV && !state.currentLocation) {
       const defaultDevLocation: LocationData = {
-        lat: 37.7749, // San Francisco
-        lng: -122.4194,
+        lat: 9.0320, // Addis Ababa, Ethiopia
+        lng: 38.7469,
         accuracy: 10,
-        altitude: 50,
+        altitude: 2355, // Addis Ababa elevation in meters
         speed: 0,
         heading: 0,
         timestamp: Date.now(),
       };
       dispatch({ type: 'SET_CURRENT_LOCATION', location: defaultDevLocation });
       dispatch({ type: 'SET_PERMISSION_STATUS', status: 'granted' });
-      logger.info('Using default development location', defaultDevLocation);
+      logger.debug('Using default development location', defaultDevLocation);
     }
   }, []); // Empty dependency array - only run once on mount
 

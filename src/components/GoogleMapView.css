@@ -1,0 +1,74 @@
+/* Custom cursor styles for Google Maps interaction */
+.map-container {
+  cursor: grab;
+  cursor: -webkit-grab;
+  cursor: -moz-grab;
+  transition: cursor 0.1s ease-in-out;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.map-container.dragging {
+  cursor: grabbing !important;
+  cursor: -webkit-grabbing !important;
+  cursor: -moz-grabbing !important;
+}
+
+.map-container:active {
+  cursor: grabbing !important;
+  cursor: -webkit-grabbing !important;
+  cursor: -moz-grabbing !important;
+}
+
+/* Ensure all child elements inherit the cursor */
+.map-container * {
+  cursor: inherit !important;
+}
+
+/* Override Google Maps default cursors when dragging */
+.map-container.dragging .gm-style,
+.map-container.dragging .gm-style div,
+.map-container.dragging .gm-style-cc {
+  cursor: grabbing !important;
+  cursor: -webkit-grabbing !important;
+  cursor: -moz-grabbing !important;
+}
+
+/* Default state - only show grab cursor when hovering over draggable areas */
+.gm-style {
+  cursor: default !important;
+}
+
+.gm-style div {
+  cursor: default !important;
+}
+
+/* Show grab cursor only when hovering over the map itself (not controls) */
+.map-container:hover .gm-style-pbc {
+  cursor: grab !important;
+  cursor: -webkit-grab !important;
+  cursor: -moz-grab !important;
+}
+
+/* Smooth cursor transitions */
+.map-container,
+.map-container *,
+.gm-style,
+.gm-style * {
+  transition: cursor 0.1s ease-in-out !important;
+}
+
+/* Ensure controls maintain pointer cursor */
+.gm-bundled-control,
+.gm-bundled-control *,
+.gmnoprint,
+.gmnoprint * {
+  cursor: pointer !important;
+}
+
+/* Street View controls */
+.gm-svpc {
+  cursor: pointer !important;
+}

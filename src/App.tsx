@@ -26,10 +26,11 @@ import { Gamification } from './components/Gamification';
 import { FleetManagement } from './components/FleetManagement';
 import { APIDocs } from './components/APIDocs';
 import { MultiStopRoutePlanner } from './components/MultiStopRoutePlanner';
+import { OfflineMapsPanel } from './components/OfflineMapsPanel';
+import { OfflineMapIndicator } from './components/OfflineMapIndicator';
 import { OnboardingFlow } from './components/OnboardingFlow';
 import { Button } from './components/ui/button';
-import { ORSConfigPanel } from './components/ORSConfigPanel';
-import { Search, MapPin, User, Target, Mic, Bell, Car, Brain, Trophy, ArrowLeft, Menu, X } from 'lucide-react';
+import { Search, MapPin, User, Target, Mic, Bell, Car, Brain, Trophy, ArrowLeft, Menu, X, Download, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from './hooks/useAuth';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -53,7 +54,7 @@ import { ThemeProvider } from 'next-themes';
 
 import type { Location, Route, TransportMode } from './contexts/NavigationContext';
 
-type Screen = 'map' | 'search' | 'route' | 'navigation' | 'saved' | 'settings' | 'transit' | 'offline' | 'ar' | 'social' | 'profile' | 'voice' | 'eta-share' | 'safety' | 'integrations' | 'ai-predictions' | 'analytics' | 'parking' | 'gamification' | 'fleet' | 'api-docs' | 'multi-stop' | 'ors-config' | 'developer' | 'place-details' | 'push-settings' | 'device-test' | 'crash-reports';
+type Screen = 'map' | 'search' | 'route' | 'navigation' | 'saved' | 'settings' | 'transit' | 'offline' | 'ar' | 'social' | 'profile' | 'voice' | 'eta-share' | 'safety' | 'integrations' | 'ai-predictions' | 'analytics' | 'parking' | 'gamification' | 'fleet' | 'api-docs' | 'multi-stop' | 'developer' | 'place-details' | 'push-settings' | 'device-test' | 'crash-reports';
 
 function AppContent() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -89,6 +90,9 @@ function AppContent() {
   const [showPlaceDetails, setShowPlaceDetails] = useState(false);
   const [useEnhancedMap, setUseEnhancedMap] = useState(true);
   const [pendingSearchQuery, setPendingSearchQuery] = useState('');
+  const [searchSuggestions, setSearchSuggestions] = useState<Location[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isVoiceSearching, setIsVoiceSearching] = useState(false);
   const pageRouter = usePageRouter();
 
   // Check if user has completed onboarding
@@ -147,7 +151,11 @@ function AppContent() {
     setSearchQuery(query);
     logger.debug('Search initiated', { query });
     
-    if (!query.trim()) return;
+    if (!query.trim()) {
+      setSearchSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
     
     try {
       // Use Google Places search for suggestions
@@ -158,30 +166,172 @@ function AppContent() {
       });
       
       if (results.length > 0) {
-        // Navigate to search panel with results
-        setCurrentScreen('search');
-        toast.success(`Found ${results.length} results for "${query}"`);
+        // Convert to Location objects
+        const suggestions: Location[] = results.map(result => ({
+          id: result.place_id || `search_${Date.now()}_${Math.random()}`,
+          name: result.name || query,
+          address: result.formatted_address || result.vicinity || '',
+          lat: result.geometry?.location?.lat() || 0,
+          lng: result.geometry?.location?.lng() || 0,
+          category: result.types?.[0] || 'place'
+        }));
+        
+        setSearchSuggestions(suggestions);
+        setShowSuggestions(true);
+        
+        // If there's an exact match or single result, auto-select it
+        if (suggestions.length === 1 || 
+            suggestions[0].name.toLowerCase() === query.toLowerCase()) {
+          handleLocationSelect(suggestions[0]);
+          setShowSuggestions(false);
+        }
       } else {
-        toast.info('No results found for your search');
+        // Show popular suggestions based on transport mode
+        const popularSuggestions = getPopularSuggestions(transportMode, query);
+        setSearchSuggestions(popularSuggestions);
+        setShowSuggestions(popularSuggestions.length > 0);
+        
+        if (popularSuggestions.length === 0) {
+          toast.info('No results found. Try a different search term.');
+        }
       }
     } catch (error) {
       logger.error('Search failed:', error);
-      toast.error('Search failed. Please try again.');
-      // Fallback to search panel
-      setCurrentScreen('search');
+      
+      // Show popular suggestions as fallback
+      const popularSuggestions = getPopularSuggestions(transportMode, query);
+      setSearchSuggestions(popularSuggestions);
+      setShowSuggestions(popularSuggestions.length > 0);
+      
+      if (popularSuggestions.length === 0) {
+        toast.error('Search failed. Please check your connection.');
+      }
     }
   };
+  
+  // Get popular search suggestions
+  const getPopularSuggestions = (mode: string, query: string): Location[] => {
+    const suggestions = [
+      // Restaurants & Food
+      { id: 'mcdonalds', name: "McDonald's", category: 'restaurant', keywords: ['mcdonalds', 'food', 'burger', 'restaurant'] },
+      { id: 'starbucks', name: 'Starbucks', category: 'cafe', keywords: ['starbucks', 'coffee', 'cafe'] },
+      { id: 'walmart', name: 'Walmart', category: 'store', keywords: ['walmart', 'shopping', 'store', 'grocery'] },
+      { id: 'target', name: 'Target', category: 'store', keywords: ['target', 'shopping', 'store'] },
+      
+      // Gas Stations (more relevant for driving)
+      ...(mode === 'driving' ? [
+        { id: 'shell', name: 'Shell Gas Station', category: 'gas_station', keywords: ['shell', 'gas', 'fuel'] },
+        { id: 'chevron', name: 'Chevron', category: 'gas_station', keywords: ['chevron', 'gas', 'fuel'] },
+        { id: 'parking', name: 'Parking', category: 'parking', keywords: ['parking', 'park'] },
+      ] : []),
+      
+      // Services
+      { id: 'hospital', name: 'Hospital', category: 'hospital', keywords: ['hospital', 'emergency', 'medical'] },
+      { id: 'pharmacy', name: 'Pharmacy', category: 'pharmacy', keywords: ['pharmacy', 'medicine', 'cvs', 'walgreens'] },
+      { id: 'bank', name: 'Bank/ATM', category: 'bank', keywords: ['bank', 'atm', 'money'] },
+      { id: 'hotel', name: 'Hotels', category: 'lodging', keywords: ['hotel', 'motel', 'stay', 'accommodation'] },
+      
+      // Walking specific
+      ...(mode === 'walking' ? [
+        { id: 'park', name: 'Park', category: 'park', keywords: ['park', 'green', 'nature'] },
+        { id: 'library', name: 'Library', category: 'library', keywords: ['library', 'books'] },
+      ] : []),
+    ];
+    
+    const queryLower = query.toLowerCase();
+    return suggestions
+      .filter(suggestion => 
+        suggestion.keywords.some(keyword => keyword.includes(queryLower)) ||
+        suggestion.name.toLowerCase().includes(queryLower)
+      )
+      .slice(0, 5)
+      .map(suggestion => ({
+        id: suggestion.id,
+        name: suggestion.name,
+        address: `Search for nearby ${suggestion.category}`,
+        lat: 0, // Will be filled when selected
+        lng: 0, // Will be filled when selected  
+        category: suggestion.category
+      }));
+  };
+  
+  // Handle voice search
+  const startVoiceSearch = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      toast.error('Voice search not supported in this browser');
+      return;
+    }
+    
+    const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+    const recognition = new SpeechRecognition();
+    
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+    
+    setIsVoiceSearching(true);
+    toast.info('🎤 Listening... Say a place name or address');
+    
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setSearchQuery(transcript);
+      handleSearch(transcript);
+      toast.success(`Searching for: "${transcript}"`);
+    };
+    
+    recognition.onerror = (event) => {
+      logger.error('Voice recognition error:', event.error);
+      toast.error('Voice search failed. Please try again.');
+      setIsVoiceSearching(false);
+    };
+    
+    recognition.onend = () => {
+      setIsVoiceSearching(false);
+    };
+    
+    recognition.start();
+  };
 
-  const handleLocationSelect = (location: Location) => {
-    logger.debug('Location selected', { location });
+  const handleLocationSelect = (location: Location, forceRouteScreen: boolean = false) => {
+    logger.debug('Location selected', { location, forceRouteScreen });
     setSelectedLocation(location);
     
-    // Navigate to appropriate screen based on transport mode
-    if (transportMode === 'transit') {
-      setCurrentScreen('transit');
-    } else {
-      setCurrentScreen('route');
-    }
+    // Always stay on map screen for better UX - route will auto-display on map
+    setCurrentScreen('map');
+    
+    // Show appropriate emoji based on transport mode
+    const modeEmoji = {
+      driving: '🚗',
+      walking: '🚶',
+      cycling: '🚴',
+      transit: '🚌'
+    }[transportMode as string] || '📍';
+    
+    // Show quick feedback
+    toast.info(`${modeEmoji} Getting ${transportMode} directions to ${location.name}...`, {
+      duration: 2000
+    });
+  };
+
+  // Handle detailed route planning (but keep on map)
+  const handleForceRouteScreen = (location: Location) => {
+    logger.debug('Route planning requested', { location });
+    setSelectedLocation(location);
+    
+    // Stay on map - the route will be calculated and displayed automatically
+    setCurrentScreen('map');
+    
+    // Show appropriate feedback
+    const modeEmoji = {
+      driving: '🚗',
+      walking: '🚶',
+      cycling: '🚴',
+      transit: '🚌'
+    }[transportMode as string] || '📍';
+    
+    toast.info(`${modeEmoji} Calculating detailed ${transportMode} route...`, {
+      duration: 2500
+    });
   };
 
   const handleStartNavigation = (route: Route) => {
@@ -346,6 +496,7 @@ function AppContent() {
             onOpenSafety={() => setCurrentScreen('safety')}
             onOpenAnalytics={() => setCurrentScreen('analytics')}
             onOpenGamification={() => setCurrentScreen('gamification')}
+            onOpenOfflineMaps={() => setCurrentScreen('offline')}
           />
         );
       case 'voice':
@@ -386,6 +537,7 @@ function AppContent() {
             onNavigateToPushSettings={() => setCurrentScreen('push-settings')}
             onNavigateToDeviceTest={() => setCurrentScreen('device-test')}
             onNavigateToCrashReports={() => setCurrentScreen('crash-reports')}
+            onNavigateToOfflineMaps={() => setCurrentScreen('offline')}
           />
         );
       case 'safety':
@@ -465,7 +617,8 @@ function AppContent() {
                   name: spot.name,
                   address: spot.address
                 });
-                setCurrentScreen('route');
+                // Stay on map - route will auto-display
+                setCurrentScreen('map');
               }
             }}
           />
@@ -509,13 +662,7 @@ function AppContent() {
                 handleStartNavigation(normalizedRoute);
               }
             }}
-            onBack={() => setCurrentScreen('route')}
-          />
-        );
-      case 'ors-config':
-        return (
-          <ORSConfigPanel
-            onBack={() => setCurrentScreen('settings')}
+            onBack={() => setCurrentScreen('map')}
           />
         );
       case 'developer':
@@ -543,6 +690,12 @@ function AppContent() {
           <div className="h-full bg-white flex items-center justify-center">
             <p className="text-gray-500">No place selected</p>
           </div>
+        );
+      case 'offline':
+        return (
+          <OfflineMapsPanel
+            onBack={() => setCurrentScreen('map')}
+          />
         );
       case 'push-settings':
         return (
@@ -580,6 +733,7 @@ function AppContent() {
             isNavigating={isNavigating}
             centerSignal={centerSignal}
             onLocationSelect={handleLocationSelect}
+            onForceRouteScreen={handleForceRouteScreen}
             onMapReady={(map) => {
               logger.info('Google Map instance ready');
             }}
@@ -588,12 +742,8 @@ function AppContent() {
               logger.info('Route requested from map click', { from, to });
               setSelectedLocation(to);
               
-              // Navigate to route screen to show route options
-              if (transportMode === 'transit') {
-                setCurrentScreen('transit');
-              } else {
-                setCurrentScreen('route');
-              }
+              // Stay on map - route will display automatically
+              // The GoogleMapView will handle the route display
             }}
           />
         );
@@ -623,11 +773,8 @@ function AppContent() {
                   handleStopNavigation();
                 } else if (currentScreen === 'ar' || currentScreen === 'eta-share') {
                   setCurrentScreen('navigation');
-                } else if (currentScreen === 'multi-stop') {
-                  setCurrentScreen('route');
-                } else if (currentScreen === 'transit' || currentScreen === 'route') {
-                  setCurrentScreen('map');
                 } else {
+                  // Always go back to map for all other screens
                   setCurrentScreen('map');
                 }
               }}
@@ -639,20 +786,42 @@ function AppContent() {
           
           {/* Search Bar - show on map screen */}
           {currentScreen === 'map' && (
-            <div className="flex-1 flex items-center gap-2">
-              <div className="flex-1 bg-gray-50 rounded-xl border border-gray-200 px-4 py-2.5">
+            <div className="flex-1 flex items-center gap-2 relative">
+              <div className="flex-1 bg-gray-50 rounded-xl border border-gray-200 px-4 py-2.5 relative">
                 <div className="flex items-center gap-3">
                   <Search className="w-5 h-5 text-gray-500" />
                   <input
                     type="text"
                     placeholder="Where to?"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      if (e.target.value.trim()) {
+                        handleSearch(e.target.value);
+                      } else {
+                        setShowSuggestions(false);
+                      }
+                    }}
                     onKeyPress={(e) => {
                       if (e.key === 'Enter' && searchQuery.trim()) {
-                        handleSearch(searchQuery);
+                        // If there are suggestions, select the first one
+                        if (searchSuggestions.length > 0) {
+                          handleLocationSelect(searchSuggestions[0]);
+                          setShowSuggestions(false);
+                        } else {
+                          handleSearch(searchQuery);
+                        }
                         setPendingSearchQuery(searchQuery);
                       }
+                    }}
+                    onFocus={() => {
+                      if (searchSuggestions.length > 0) {
+                        setShowSuggestions(true);
+                      }
+                    }}
+                    onBlur={() => {
+                      // Delay hiding suggestions to allow clicking
+                      setTimeout(() => setShowSuggestions(false), 200);
                     }}
                     className="flex-1 bg-transparent border-none outline-none text-gray-700 placeholder-gray-500"
                   />
@@ -663,6 +832,8 @@ function AppContent() {
                       onClick={() => {
                         setSearchQuery('');
                         setPendingSearchQuery('');
+                        setSearchSuggestions([]);
+                        setShowSuggestions(false);
                       }}
                       className="text-gray-400 hover:text-gray-600"
                     >
@@ -670,12 +841,66 @@ function AppContent() {
                     </Button>
                   )}
                 </div>
+                
+                {/* Search Suggestions Dropdown */}
+                {showSuggestions && searchSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 max-h-80 overflow-y-auto z-50">
+                    {searchSuggestions.map((suggestion) => (
+                      <div
+                        key={suggestion.id}
+                        className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                        onClick={() => {
+                          if (suggestion.lat === 0 && suggestion.lng === 0) {
+                            // It's a category suggestion, search for it
+                            handleSearch(suggestion.name);
+                          } else {
+                            // It's a real place, navigate to it
+                            handleLocationSelect(suggestion);
+                          }
+                          setShowSuggestions(false);
+                        }}
+                      >
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                          <MapPin className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900 truncate">{suggestion.name}</p>
+                          <p className="text-sm text-gray-600 truncate">{suggestion.address}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+              
+              {/* Voice Search Button */}
+              <Button
+                size="sm"
+                onClick={startVoiceSearch}
+                disabled={isVoiceSearching}
+                className={`${isVoiceSearching ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'} text-white`}
+              >
+                {isVoiceSearching ? (
+                  <div className="flex items-center gap-1">
+                    <div className="animate-pulse w-2 h-2 bg-white rounded-full" />
+                    <Mic className="w-4 h-4" />
+                  </div>
+                ) : (
+                  <Mic className="w-4 h-4" />
+                )}
+              </Button>
+              
+              {/* Search Button */}
               <Button
                 size="sm"
                 onClick={() => {
                   if (searchQuery.trim()) {
-                    handleSearch(searchQuery);
+                    if (searchSuggestions.length > 0) {
+                      handleLocationSelect(searchSuggestions[0]);
+                      setShowSuggestions(false);
+                    } else {
+                      handleSearch(searchQuery);
+                    }
                     setPendingSearchQuery(searchQuery);
                   } else {
                     setCurrentScreen('search');
@@ -713,7 +938,6 @@ function AppContent() {
                 {currentScreen === 'fleet' && 'Fleet Management'}
                 {currentScreen === 'api-docs' && 'API Documentation'}
                 {currentScreen === 'multi-stop' && 'Multi-Stop Route'}
-                {currentScreen === 'ors-config' && 'API Configuration'}
                 {currentScreen === 'developer' && 'Developer Tools'}
                 {currentScreen === 'place-details' && 'Place Details'}
                 {currentScreen === 'push-settings' && 'Notifications'}
@@ -752,6 +976,15 @@ function AppContent() {
               <User className="w-5 h-5" />
             </Button>
             
+            <Button
+              size="icon"
+              className="bg-white text-blue-600 shadow-sm border border-gray-200 hover:bg-blue-50"
+              onClick={() => setCurrentScreen('offline')}
+              title="Offline Maps"
+            >
+              <WifiOff className="w-5 h-5" />
+            </Button>
+            
               <ThemeToggle />
               <NavigationMenu
               onNavigateToPage={(route, params) => pageRouter.navigateTo(route, params)}
@@ -770,6 +1003,16 @@ function AppContent() {
           />
         </div>
       )}
+      
+      {/* Offline Map Indicator - Hidden per user request */}
+      {/* {currentScreen === 'map' && (
+        <div className="absolute top-20 right-4 z-40">
+          <OfflineMapIndicator
+            currentLocation={navLocation}
+            onOpenOfflineMaps={() => setCurrentScreen('offline')}
+          />
+        </div>
+      )} */}
 
       {/* Smart Notifications - Only show on map screen */}
       {currentScreen === 'map' && showNotifications && (

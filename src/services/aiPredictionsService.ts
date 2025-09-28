@@ -53,11 +53,37 @@ class AIPredictionsService {
   private map: google.maps.Map | null = null;
 
   initialize(map: google.maps.Map) {
-    this.map = map;
-    this.directionsService = new google.maps.DirectionsService();
-    this.placesService = new google.maps.places.PlacesService(map);
-    this.trafficLayer = new google.maps.TrafficLayer();
-    logger.info('AI Predictions Service initialized');
+    try {
+      this.map = map;
+      this.directionsService = new google.maps.DirectionsService();
+      
+      // Only initialize PlacesService if map is available
+      if (map) {
+        this.placesService = new google.maps.places.PlacesService(map);
+      } else {
+        logger.warn('Map not available, PlacesService will not be initialized');
+      }
+      
+      this.trafficLayer = new google.maps.TrafficLayer();
+      logger.info('AI Predictions Service initialized successfully');
+    } catch (error) {
+      logger.error('Failed to initialize AI Predictions Service', error);
+      // Continue without PlacesService - modern API will be used instead
+    }
+  }
+
+  /**
+   * Check if the service is properly initialized
+   */
+  isInitialized(): boolean {
+    return this.directionsService !== null;
+  }
+
+  /**
+   * Check if legacy Places API is available
+   */
+  hasLegacyPlacesAPI(): boolean {
+    return this.placesService !== null;
   }
 
   // Analyze real-time traffic and suggest optimal routes
@@ -150,18 +176,121 @@ class AIPredictionsService {
     destination: Location,
     arrivalTime?: Date
   ): Promise<ParkingPrediction> {
-    if (!this.placesService) {
-      throw new Error('Places service not initialized');
+    logger.info('Searching for parking near:', destination);
+    
+    try {
+      // Try modern Places API first
+      const modernResults = await this.searchParkingWithModernAPI(destination);
+      if (modernResults.length > 0) {
+        logger.info(`Modern Places API found ${modernResults.length} parking results`);
+        return this.processParkingResults(modernResults, destination, arrivalTime);
+      }
+    } catch (error) {
+      logger.warn('Modern Places API failed, trying legacy API', error);
     }
 
-    return new Promise((resolve, reject) => {
-      logger.info('Searching for parking near:', destination);
+    // Fallback to legacy Places API if available
+    if (this.placesService) {
+      try {
+        const legacyResults = await this.searchParkingWithLegacyAPI(destination);
+        if (legacyResults.length > 0) {
+          logger.info(`Legacy Places API found ${legacyResults.length} parking results`);
+          return this.processParkingResults(legacyResults, destination, arrivalTime);
+        }
+      } catch (error) {
+        logger.warn('Legacy Places API also failed', error);
+      }
+    } else {
+      logger.warn('Places service not initialized, skipping legacy API');
+    }
+
+    // Final fallback to street parking analysis
+    logger.warn('No parking results found from APIs, analyzing street parking patterns');
+    return this.analyzeStreetParking(destination, arrivalTime);
+  }
+
+  /**
+   * Search for parking using modern Places API
+   */
+  private async searchParkingWithModernAPI(destination: Location): Promise<google.maps.places.PlaceResult[]> {
+    try {
+      // Import the places library
+      const { Place } = await google.maps.importLibrary('places') as any;
       
-      // Try multiple parking-related searches to get better results
+      if (!Place) {
+        throw new Error('Modern Places API not available');
+      }
+
+      const allResults: google.maps.places.PlaceResult[] = [];
+
+      // Multiple search strategies for better coverage
+      const searchStrategies = [
+        {
+          textQuery: 'parking garage',
+          locationBias: { center: destination, radius: 1000 }
+        },
+        {
+          textQuery: 'parking lot',
+          locationBias: { center: destination, radius: 800 }
+        },
+        {
+          textQuery: 'parking',
+          locationBias: { center: destination, radius: 1200 }
+        }
+      ];
+
+      // Execute all searches
+      for (const strategy of searchStrategies) {
+        try {
+          const searchRequest = {
+            textQuery: strategy.textQuery,
+            fields: ['id', 'displayName', 'location', 'formattedAddress', 'rating', 'types', 'businessStatus'],
+            locationBias: strategy.locationBias,
+            maxResultCount: 10
+          };
+
+          const { places } = await Place.searchByText(searchRequest);
+          
+          // Convert modern Place objects to legacy format for compatibility
+          places.forEach((place: any) => {
+            // Check if this place is already in results (avoid duplicates)
+            const exists = allResults.some(existing => existing.place_id === place.id);
+            if (!exists) {
+              allResults.push({
+                place_id: place.id,
+                name: place.displayName,
+                geometry: {
+                  location: place.location
+                },
+                formatted_address: place.formattedAddress,
+                rating: place.rating,
+                business_status: place.businessStatus,
+                types: place.types || []
+              } as google.maps.places.PlaceResult);
+            }
+          });
+
+        } catch (searchError) {
+          logger.warn(`Modern Places search strategy failed: ${strategy.textQuery}`, searchError);
+        }
+      }
+
+      return allResults;
+    } catch (error) {
+      logger.error('Modern Places API search failed entirely', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Search for parking using legacy Places API
+   */
+  private async searchParkingWithLegacyAPI(destination: Location): Promise<google.maps.places.PlaceResult[]> {
+    return new Promise((resolve, reject) => {
       const searchRequests = [
         {
           location: new google.maps.LatLng(destination.lat, destination.lng),
-          radius: 1000, // Increased radius
+          radius: 1000,
           keyword: 'parking garage',
         },
         {
@@ -178,28 +307,31 @@ class AIPredictionsService {
 
       let allResults: google.maps.places.PlaceResult[] = [];
       let completedSearches = 0;
+      let hasError = false;
 
       const handleSearchComplete = () => {
         completedSearches++;
         if (completedSearches === searchRequests.length) {
-          logger.info(`Found ${allResults.length} total parking results`);
-          
-          if (allResults.length === 0) {
-            logger.warn('No parking results found, analyzing street parking patterns');
-            // Use real street parking analysis instead of mock data
-            const streetParkingAnalysis = this.analyzeStreetParking(destination, arrivalTime);
-            resolve(streetParkingAnalysis);
-            return;
+          if (hasError && allResults.length === 0) {
+            reject(new Error('All legacy Places API searches failed'));
+          } else {
+            resolve(allResults);
           }
-          
-          processResults(allResults);
         }
       };
+
+      // Set a timeout to prevent hanging
+      const timeout = setTimeout(() => {
+        if (completedSearches < searchRequests.length) {
+          logger.warn('Legacy Places API search timeout');
+          reject(new Error('Places API search timeout'));
+        }
+      }, 10000); // 10 second timeout
 
       // Perform all searches
       searchRequests.forEach((request, index) => {
         this.placesService!.nearbySearch(request, (results, status) => {
-          logger.info(`Search ${index + 1} status: ${status}, results: ${results?.length || 0}`);
+          logger.info(`Legacy search ${index + 1} status: ${status}, results: ${results?.length || 0}`);
           
           if (status === google.maps.places.PlacesServiceStatus.OK && results) {
             // Filter out duplicates based on place_id
@@ -207,93 +339,146 @@ class AIPredictionsService {
               result.place_id && !allResults.some(existing => existing.place_id === result.place_id)
             );
             allResults.push(...newResults);
+          } else {
+            hasError = true;
+            logger.error(`Legacy Places search ${index + 1} failed with status: ${status}`);
           }
           
           handleSearchComplete();
         });
       });
 
-      const processResults = (results: google.maps.places.PlaceResult[]) => {
+      // Clear timeout when promise resolves
+      resolve = ((originalResolve) => {
+        return (value: any) => {
+          clearTimeout(timeout);
+          originalResolve(value);
+        };
+      })(resolve);
 
-        const parkingSpots: ParkingSpot[] = results.map(place => {
-          // Calculate walking distance
-          const distance = google.maps.geometry.spherical.computeDistanceBetween(
-            new google.maps.LatLng(destination.lat, destination.lng),
-            place.geometry!.location!
-          );
+      reject = ((originalReject) => {
+        return (reason: any) => {
+          clearTimeout(timeout);
+          originalReject(reason);
+        };
+      })(reject);
+    });
+  }
 
-          // Determine parking type from place data
-          let parkingType: 'street' | 'garage' | 'lot' | 'valet' = 'lot';
-          const placeName = (place.name || '').toLowerCase();
-          const placeTypes = place.types || [];
-          
-          if (placeName.includes('garage') || placeTypes.includes('parking') || placeName.includes('structure')) {
-            parkingType = 'garage';
-          } else if (placeName.includes('lot') || placeName.includes('plaza') || placeName.includes('center')) {
-            parkingType = 'lot';
-          } else if (placeName.includes('valet')) {
-            parkingType = 'valet';
-          } else if (placeName.includes('street') || placeName.includes('meter')) {
-            parkingType = 'street';
-          }
-
-          // Estimate availability based on rating, price level, and time
-          const hour = (arrivalTime || new Date()).getHours();
-          const isPeakHour = (hour >= 8 && hour <= 10) || (hour >= 17 && hour <= 19);
-          const baseAvailability = 50 + (place.rating ? Math.min(place.rating * 8, 40) : 20);
-          const availability = isPeakHour 
-            ? Math.max(15, baseAvailability - 25)
-            : Math.min(95, baseAvailability + 15);
-
-          // Calculate pricing based on type and location
-          let pricing = '$5/hr';
-          if (place.price_level) {
-            pricing = `$${Math.max(2, place.price_level * 3)}/hr`;
+  /**
+   * Process parking results from either API
+   */
+  private processParkingResults(
+    results: google.maps.places.PlaceResult[], 
+    destination: Location, 
+    arrivalTime?: Date
+  ): ParkingPrediction {
+    const parkingSpots: ParkingSpot[] = results.map(place => {
+      // Calculate walking distance
+      let distance = 0;
+      try {
+        if (place.geometry?.location) {
+          if (typeof place.geometry.location.lat === 'function') {
+            // Legacy format
+            distance = google.maps.geometry.spherical.computeDistanceBetween(
+              new google.maps.LatLng(destination.lat, destination.lng),
+              place.geometry.location
+            );
           } else {
-            switch (parkingType) {
-              case 'garage': pricing = '$8/hr'; break;
-              case 'lot': pricing = '$6/hr'; break;
-              case 'street': pricing = '$3/hr'; break;
-              case 'valet': pricing = '$15/hr'; break;
-            }
+            // Modern format - handle both object and LatLng types
+            const location = place.geometry.location as any;
+            const lat: number = typeof location.lat === 'function' ? location.lat() : Number(location.lat);
+            const lng: number = typeof location.lng === 'function' ? location.lng() : Number(location.lng);
+            distance = google.maps.geometry.spherical.computeDistanceBetween(
+              new google.maps.LatLng(destination.lat, destination.lng),
+              new google.maps.LatLng(lat, lng)
+            );
           }
+        }
+      } catch (error) {
+        logger.warn('Failed to calculate distance for parking spot', error);
+        distance = 500; // Default distance
+      }
 
-          logger.info(`Found parking: ${place.name}, type: ${parkingType}, availability: ${availability}%`);
+      // Determine parking type from place data
+      let parkingType: 'street' | 'garage' | 'lot' = 'lot';
+      const placeName = (place.name || '').toLowerCase();
+      const placeTypes = place.types || [];
+      
+      if (placeName.includes('garage') || placeTypes.includes('parking') || placeName.includes('structure')) {
+        parkingType = 'garage';
+      } else if (placeName.includes('lot') || placeName.includes('plaza') || placeName.includes('center')) {
+        parkingType = 'lot';
+      } else if (placeName.includes('street') || placeName.includes('meter')) {
+        parkingType = 'street';
+      }
 
-          return {
-            placeId: place.place_id!,
-            location: {
-              lat: place.geometry!.location!.lat(),
-              lng: place.geometry!.location!.lng(),
-            },
-            name: place.name || 'Parking Area',
-            pricing,
-            availability,
-            walkingDistance: Math.round(distance),
-            type: parkingType,
-          };
-        });
+      // Estimate availability based on rating, price level, and time
+      const hour = (arrivalTime || new Date()).getHours();
+      const isPeakHour = (hour >= 8 && hour <= 10) || (hour >= 17 && hour <= 19);
+      const rating = typeof place.rating === 'number' ? place.rating : 3.5; // Default rating
+      const baseAvailability = 50 + Math.min(rating * 8, 40);
+      const availability = isPeakHour 
+        ? Math.max(15, baseAvailability - 25)
+        : Math.min(95, baseAvailability + 15);
 
-        // Sort by combination of availability and distance
-        parkingSpots.sort((a, b) => {
-          const scoreA = a.availability * 0.6 - (a.walkingDistance / 100) * 0.4;
-          const scoreB = b.availability * 0.6 - (b.walkingDistance / 100) * 0.4;
-          return scoreB - scoreA;
-        });
+      // Calculate pricing based on type and location
+      let pricing = '$5/hr';
+      if (place.price_level) {
+        pricing = `$${Math.max(2, place.price_level * 3)}/hr`;
+      } else {
+        switch (parkingType) {
+          case 'garage': pricing = '$8/hr'; break;
+          case 'lot': pricing = '$6/hr'; break;
+          case 'street': pricing = '$3/hr'; break;
+        }
+      }
 
-        const bestOption = parkingSpots[0] || null;
-        const avgOccupancy = parkingSpots.reduce((sum, spot) => sum + (100 - spot.availability), 0) / parkingSpots.length;
+      // Get location coordinates
+      let lat = 0, lng = 0;
+      if (place.geometry?.location) {
+        if (typeof place.geometry.location.lat === 'function') {
+          lat = place.geometry.location.lat();
+          lng = place.geometry.location.lng();
+        } else {
+          lat = place.geometry.location.lat;
+          lng = place.geometry.location.lng;
+        }
+      }
 
-        logger.info(`Processed ${parkingSpots.length} parking spots, best: ${bestOption?.name}`);
+      logger.info(`Found parking: ${place.name}, type: ${parkingType}, availability: ${availability}%`);
 
-        resolve({
-          nearbySpots: parkingSpots.slice(0, 8), // Top 8 options
-          bestOption,
-          averageOccupancy: Math.round(avgOccupancy) || 50,
-          peakHours: ['8:00 AM - 10:00 AM', '5:00 PM - 7:00 PM'],
-        });
+      return {
+        placeId: place.place_id!,
+        location: { lat, lng },
+        name: place.name || 'Parking Area',
+        pricing,
+        availability,
+        walkingDistance: Math.round(distance),
+        type: parkingType,
       };
     });
+
+    // Sort by combination of availability and distance
+    parkingSpots.sort((a, b) => {
+      const scoreA = a.availability * 0.6 - (a.walkingDistance / 100) * 0.4;
+      const scoreB = b.availability * 0.6 - (b.walkingDistance / 100) * 0.4;
+      return scoreB - scoreA;
+    });
+
+    const bestOption = parkingSpots[0] || null;
+    const avgOccupancy = parkingSpots.length > 0 
+      ? parkingSpots.reduce((sum, spot) => sum + (100 - spot.availability), 0) / parkingSpots.length
+      : 50;
+
+    logger.info(`Processed ${parkingSpots.length} parking spots, best: ${bestOption?.name}`);
+
+    return {
+      nearbySpots: parkingSpots.slice(0, 8), // Top 8 options
+      bestOption,
+      averageOccupancy: Math.round(avgOccupancy),
+      peakHours: ['8:00 AM - 10:00 AM', '5:00 PM - 7:00 PM'],
+    };
   }
 
   /**

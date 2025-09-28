@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from './ui/button';
-import { directionsService } from '../services/directionsService';
+import directionsService from '../services/directionsService';
 import { logger } from '../utils/logger';
 import { toast } from 'sonner';
 

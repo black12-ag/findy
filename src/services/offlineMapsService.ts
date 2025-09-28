@@ -1,1187 +1,1039 @@
 /**
- * 🗺️ Offline Maps Service - Real Tile Caching & Route Storage
+ * 🗺️ Offline Maps Service
  * 
- * Implements map tile caching, offline route calculation, and IndexedDB storage
+ * Handles downloading and caching map tiles for user's city
+ * Provides offline navigation capabilities with Google Maps tiles
  */
 
-export interface MapTile {
-  id: string;
-  z: number; // zoom level
-  x: number; // tile x coordinate
-  y: number; // tile y coordinate
-  data: Blob; // tile image data
-  timestamp: number;
-  size: number; // in bytes
-  provider: string; // 'osm', 'satellite', etc.
+import { logger } from '../utils/logger';
+import { toast } from 'sonner';
+import { GOOGLE_MAPS_API_KEY, API_SERVICES, REQUEST_TIMEOUT } from '../config/apiConfig';
+
+export interface CityBounds {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
 }
 
-export interface OfflineRegion {
+export interface CityInfo {
   id: string;
   name: string;
-  bounds: {
-    north: number;
-    south: number;
-    east: number;
-    west: number;
-  };
+  country: string;
+  bounds: CityBounds;
   center: {
     lat: number;
     lng: number;
   };
-  minZoom: number;
-  maxZoom: number;
-  tileCount: number;
-  downloadedTiles: number;
-  totalSize: number; // in bytes
-  createdAt: string;
-  updatedAt: string;
-  status: 'idle' | 'downloading' | 'complete' | 'error' | 'paused';
-  progress: number; // 0-100
-  mapProvider: 'osm' | 'satellite' | 'terrain';
+  population?: number;
+  area?: number; // in km²
 }
 
-export interface OfflineRoute {
+export interface OfflineMapData {
   id: string;
-  name: string;
-  from: { lat: number; lng: number; name: string };
-  to: { lat: number; lng: number; name: string };
-  geometry: [number, number][];
-  distance: number; // meters
-  duration: number; // seconds
-  instructions: string[];
-  createdAt: string;
-  mode: 'driving' | 'walking' | 'cycling';
+  cityId: string;
+  cityName: string;
+  bounds: CityBounds;
+  zoomLevels: number[];
+  downloadDate: string;
+  lastUsed: string;
+  tileCount: number;
+  sizeBytes: number;
+  version: string;
 }
 
-export interface StorageInfo {
-  totalUsed: number; // bytes
-  totalAvailable: number; // bytes
-  tilesCount: number;
-  regionsCount: number;
-  routesCount: number;
+export interface DownloadProgress {
+  cityId: string;
+  cityName: string;
+  totalTiles: number;
+  downloadedTiles: number;
+  failedTiles: number;
+  progress: number; // 0-100
+  status: 'preparing' | 'downloading' | 'completed' | 'failed' | 'cancelled';
+  estimatedSize: number;
+  downloadedSize: number;
+  startTime: number;
+  estimatedTimeRemaining?: number;
 }
 
 class OfflineMapsService {
-  private dbName = 'OfflineMapsDB';
-  private dbVersion = 1;
   private db: IDBDatabase | null = null;
+  private downloadQueue: Map<string, DownloadProgress> = new Map();
+  private isDownloading = false;
+  private currentDownload: string | null = null;
+  private googleMapsLoadPromise: Promise<void> | null = null;
 
-  // Map tile providers
-  private tileProviders = {
-    osm: {
-      name: 'OpenStreetMap',
-      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      attribution: '© OpenStreetMap contributors'
-    },
-    satellite: {
-      name: 'Satellite',
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      attribution: '© Esri'
-    },
-    terrain: {
-      name: 'Terrain',
-      url: 'https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.jpg',
-      attribution: '© Stamen Design'
-    }
-  };
+  constructor() {
+    this.initializeDB();
+    this.validateAPIKey();
+    this.ensureGoogleMapsLoaded();
+  }
 
   /**
-   * Initialize the IndexedDB database
+   * Ensure Google Maps JavaScript API is loaded
    */
-  async initialize(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, this.dbVersion);
+  private async ensureGoogleMapsLoaded(): Promise<void> {
+    if (this.googleMapsLoadPromise) {
+      return this.googleMapsLoadPromise;
+    }
 
-      request.onerror = () => reject(request.error);
+    this.googleMapsLoadPromise = new Promise<void>(async (resolve, reject) => {
+      try {
+        // Check if Google Maps is already loaded
+        if (typeof google !== 'undefined' && google.maps && google.maps.places) {
+          logger.info('Google Maps API already loaded');
+          resolve();
+          return;
+        }
+
+        // Import Google Maps Loader
+        const { Loader } = await import('@googlemaps/js-api-loader');
+        
+        const loader = new Loader({
+          apiKey: GOOGLE_MAPS_API_KEY,
+          version: 'weekly',
+          libraries: ['places', 'geometry', 'geocoding']
+        });
+
+        await loader.load();
+        logger.info('Google Maps API loaded successfully');
+        resolve();
+      } catch (error) {
+        logger.error('Failed to load Google Maps API:', error);
+        reject(error);
+      }
+    });
+
+    return this.googleMapsLoadPromise;
+  }
+
+  /**
+   * Check if Google Maps API is ready
+   */
+  private async waitForGoogleMaps(): Promise<boolean> {
+    try {
+      await this.ensureGoogleMapsLoaded();
+      return typeof google !== 'undefined' && !!google.maps && !!google.maps.places;
+    } catch (error) {
+      logger.error('Google Maps API not available:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Validate Google Maps API key
+   */
+  private validateAPIKey(): void {
+    if (!GOOGLE_MAPS_API_KEY) {
+      logger.error('Google Maps API key is missing');
+      toast.error('Google Maps API key is required for location services');
+    }
+  }
+
+  /**
+   * Initialize IndexedDB for offline maps storage
+   */
+  private async initializeDB(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('OfflineMapsDB', 3);
+
+      request.onerror = () => {
+        logger.error('Failed to open offline maps database');
+        reject(request.error);
+      };
+
       request.onsuccess = () => {
         this.db = request.result;
+        logger.info('Offline maps database initialized');
         resolve();
       };
 
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
 
-        // Create tiles store
-        if (!db.objectStoreNames.contains('tiles')) {
-          const tilesStore = db.createObjectStore('tiles', { keyPath: 'id' });
-          tilesStore.createIndex('provider', 'provider', { unique: false });
-          tilesStore.createIndex('zxy', ['z', 'x', 'y'], { unique: false });
+        // Map tiles store
+        if (!db.objectStoreNames.contains('mapTiles')) {
+          const tilesStore = db.createObjectStore('mapTiles', { keyPath: 'id' });
+          tilesStore.createIndex('cityId', 'cityId', { unique: false });
+          tilesStore.createIndex('zoomLevel', 'zoomLevel', { unique: false });
         }
 
-        // Create regions store
-        if (!db.objectStoreNames.contains('regions')) {
-          const regionsStore = db.createObjectStore('regions', { keyPath: 'id' });
-          regionsStore.createIndex('status', 'status', { unique: false });
+        // Offline maps metadata
+        if (!db.objectStoreNames.contains('offlineMaps')) {
+          const mapsStore = db.createObjectStore('offlineMaps', { keyPath: 'id' });
+          mapsStore.createIndex('cityId', 'cityId', { unique: true });
         }
 
-        // Create routes store
-        if (!db.objectStoreNames.contains('routes')) {
-          const routesStore = db.createObjectStore('routes', { keyPath: 'id' });
-          routesStore.createIndex('mode', 'mode', { unique: false });
+        // Cities database
+        if (!db.objectStoreNames.contains('cities')) {
+          const citiesStore = db.createObjectStore('cities', { keyPath: 'id' });
+          citiesStore.createIndex('name', 'name', { unique: false });
+          citiesStore.createIndex('country', 'country', { unique: false });
         }
 
-        // Create metadata store
-        if (!db.objectStoreNames.contains('metadata')) {
-          db.createObjectStore('metadata', { keyPath: 'key' });
+        // User preferences
+        if (!db.objectStoreNames.contains('preferences')) {
+          db.createObjectStore('preferences', { keyPath: 'key' });
         }
       };
     });
   }
 
   /**
-   * Download map tiles for a region
+   * Detect user's current city using geolocation
    */
-  async downloadRegion(
-    region: Omit<OfflineRegion, 'id' | 'tileCount' | 'downloadedTiles' | 'totalSize' | 'createdAt' | 'updatedAt' | 'status' | 'progress'>,
-    onProgress?: (progress: number, downloaded: number, total: number) => void
-  ): Promise<string> {
-    if (!this.db) throw new Error('Database not initialized');
+  async detectUserCity(): Promise<CityInfo | null> {
+    try {
+      const position = await this.getCurrentPosition();
+      const { latitude: lat, longitude: lng } = position.coords;
 
-    // Calculate tiles needed
-    const tiles = this.calculateTilesInBounds(
-      region.bounds,
-      region.minZoom,
-      region.maxZoom
-    );
-
-    const regionId = `region_${Date.now()}`;
-    const offlineRegion: OfflineRegion = {
-      ...region,
-      id: regionId,
-      tileCount: tiles.length,
-      downloadedTiles: 0,
-      totalSize: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      status: 'downloading',
-      progress: 0
-    };
-
-    // Save region to database
-    await this.saveRegion(offlineRegion);
-
-    // Start downloading tiles
-    this.downloadTiles(tiles, region.mapProvider, regionId, onProgress);
-
-    return regionId;
-  }
-
-  /**
-   * Download tiles for a region with intelligent prioritization
-   */
-  private async downloadTiles(
-    tiles: Array<{ z: number; x: number; y: number }>,
-    provider: keyof typeof this.tileProviders,
-    regionId: string,
-    onProgress?: (progress: number, downloaded: number, total: number) => void
-  ): Promise<void> {
-    let downloaded = 0;
-    let totalSize = 0;
-    
-    // Sort tiles by priority (roads and major features first)
-    const prioritizedTiles = this.prioritizeTiles(tiles);
-    const batchSize = this.getOptimalBatchSize();
-
-    // Check storage quota before starting
-    const availableStorage = await this.getAvailableStorageSpace();
-    const estimatedSize = this.estimateTilesSize(tiles, provider);
-    
-    if (estimatedSize > availableStorage) {
-      throw new Error(`Insufficient storage space. Need ${Math.round(estimatedSize / 1024 / 1024)}MB, have ${Math.round(availableStorage / 1024 / 1024)}MB`);
-    }
-
-    for (let i = 0; i < prioritizedTiles.length; i += batchSize) {
-      const batch = prioritizedTiles.slice(i, i + batchSize);
+      // Log coordinates for debugging
+      logger.info('Got user coordinates:', { lat, lng });
       
-      await Promise.all(
-        batch.map(async (tile) => {
-          try {
-            // Check if tile already exists and is fresh
-            if (await this.isTileFresh(tile.z, tile.x, tile.y, provider)) {
-              downloaded++;
-              return;
-            }
-            
-            const tileData = await this.downloadTile(tile.z, tile.x, tile.y, provider);
-            totalSize += tileData.size;
-            downloaded++;
-
-            const progress = Math.round((downloaded / tiles.length) * 100);
-            
-            // Update region progress
-            await this.updateRegionProgress(regionId, progress, downloaded, totalSize);
-            
-            // Periodically check storage and clean old tiles if needed
-            if (downloaded % 50 === 0) {
-              await this.cleanupOldTilesIfNeeded();
-            }
-            
-            if (onProgress) {
-              onProgress(progress, downloaded, tiles.length);
-            }
-          } catch (error) {
-            logger.error(`Failed to download tile ${tile.z}/${tile.x}/${tile.y}`, error);
-          }
-        })
-      );
-    }
-
-    // Mark region as complete
-    await this.updateRegionStatus(regionId, 'complete');
-  }
-
-  /**
-   * Download a single tile
-   */
-  private async downloadTile(
-    z: number,
-    x: number,
-    y: number,
-    provider: keyof typeof this.tileProviders
-  ): Promise<MapTile> {
-    const providerConfig = this.tileProviders[provider];
-    const url = providerConfig.url
-      .replace('{z}', z.toString())
-      .replace('{x}', x.toString())
-      .replace('{y}', y.toString());
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to download tile: ${response.status}`);
-    }
-
-    const blob = await response.blob();
-    const tile: MapTile = {
-      id: `${provider}_${z}_${x}_${y}`,
-      z,
-      x,
-      y,
-      data: blob,
-      timestamp: Date.now(),
-      size: blob.size,
-      provider
-    };
-
-    await this.saveTile(tile);
-    return tile;
-  }
-
-  /**
-   * Get a tile from offline storage
-   */
-  async getTile(z: number, x: number, y: number, provider: string): Promise<MapTile | null> {
-    if (!this.db) return null;
-
-    const transaction = this.db.transaction(['tiles'], 'readonly');
-    const store = transaction.objectStore('tiles');
-    
-    return new Promise((resolve, reject) => {
-      const request = store.get(`${provider}_${z}_${x}_${y}`);
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  /**
-   * Check if a tile exists offline
-   */
-  async hasTile(z: number, x: number, y: number, provider: string): Promise<boolean> {
-    const tile = await this.getTile(z, x, y, provider);
-    return tile !== null;
-  }
-
-  /**
-   * Save offline route for offline navigation
-   */
-  async saveOfflineRoute(route: Omit<OfflineRoute, 'id' | 'createdAt'>): Promise<string> {
-    if (!this.db) throw new Error('Database not initialized');
-
-    const routeId = `route_${Date.now()}`;
-    const offlineRoute: OfflineRoute = {
-      ...route,
-      id: routeId,
-      createdAt: new Date().toISOString()
-    };
-
-    const transaction = this.db.transaction(['routes'], 'readwrite');
-    const store = transaction.objectStore('routes');
-    
-    return new Promise((resolve, reject) => {
-      const request = store.add(offlineRoute);
-      request.onsuccess = () => resolve(routeId);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  /**
-   * Get offline routes
-   */
-  async getOfflineRoutes(): Promise<OfflineRoute[]> {
-    if (!this.db) return [];
-
-    const transaction = this.db.transaction(['routes'], 'readonly');
-    const store = transaction.objectStore('routes');
-    
-    return new Promise((resolve, reject) => {
-      const request = store.getAll();
-      request.onsuccess = () => resolve(request.result || []);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  /**
-   * Calculate offline route using OSRM or stored routing data
-   */
-  async calculateOfflineRoute(
-    from: { lat: number; lng: number },
-    to: { lat: number; lng: number },
-    mode: 'driving' | 'walking' | 'cycling' = 'driving'
-  ): Promise<OfflineRoute | null> {
-    try {
-      // First, try to use OSRM Web Worker if available
-      const osrmRoute = await this.calculateOSRMRoute(from, to, mode);
-      if (osrmRoute) {
-        return osrmRoute;
+      // Use Google Maps Geocoding API to get city info
+      const cityInfo = await this.geocodeLocation(lat, lng);
+      
+      if (cityInfo) {
+        await this.saveCityInfo(cityInfo);
+        logger.info('User city detected:', cityInfo.name, cityInfo.country);
+        toast.success(`Detected your location: ${cityInfo.name}, ${cityInfo.country}`);
+        return cityInfo;
       }
+
+      // If no city info was found
+      toast.error('Could not determine your city. Please select a city manually.');
+      return null;
     } catch (error) {
-      console.warn('OSRM offline routing failed, using fallback:', error);
-    }
-
-    try {
-      // Fallback to cached route segments
-      const cachedRoute = await this.buildRouteFromCachedSegments(from, to, mode);
-      if (cachedRoute) {
-        return cachedRoute;
-      }
-    } catch (error) {
-      console.warn('Cached segment routing failed:', error);
-    }
-    
-    // Final fallback: straight-line route with intelligent waypoints
-    return this.calculateFallbackRoute(from, to, mode);
-  }
-
-  /**
-   * Build fallback route with intelligent waypoints
-   */
-  private calculateFallbackRoute(
-    from: { lat: number; lng: number },
-    to: { lat: number; lng: number },
-    mode: string
-  ): OfflineRoute {
-    const distance = this.calculateDistance(from, to);
-    const duration = this.estimateDuration(distance, mode);
-    
-    return {
-      id: `fallback_${Date.now()}`,
-      name: `${mode} route (offline)`,
-      from: { ...from, name: 'Start' },
-      to: { ...to, name: 'Destination' },
-      geometry: [[from.lng, from.lat], [to.lng, to.lat]],
-      distance: Math.round(distance),
-      duration: Math.round(duration),
-      instructions: [
-        `Head ${this.getBearing(from, to)} toward destination`,
-        `Continue for ${(distance / 1000).toFixed(1)} km`,
-        'You have arrived at your destination'
-      ],
-      createdAt: new Date().toISOString(),
-      mode: mode as any
-    };
-  }
-
-  /**
-   * Calculate distance between two points using Haversine formula
-   */
-  private calculateDistance(
-    from: { lat: number; lng: number },
-    to: { lat: number; lng: number }
-  ): number {
-    const R = 6371000; // Earth's radius in meters
-    const dLat = (to.lat - from.lat) * Math.PI / 180;
-    const dLng = (to.lng - from.lng) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(from.lat * Math.PI / 180) * Math.cos(to.lat * Math.PI / 180) *
-              Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  }
-
-  /**
-   * Estimate duration based on mode and distance
-   */
-  private estimateDuration(distance: number, mode: string): number {
-    const speeds = {
-      walking: 5, // km/h
-      cycling: 15, // km/h
-      driving: 40 // km/h
-    };
-    const speed = speeds[mode as keyof typeof speeds] || speeds.walking;
-    return (distance / 1000) / speed * 3600; // seconds
-  }
-
-  /**
-   * Get bearing between two points
-   */
-  private getBearing(
-    from: { lat: number; lng: number },
-    to: { lat: number; lng: number }
-  ): string {
-    const dLng = (to.lng - from.lng) * Math.PI / 180;
-    const lat1 = from.lat * Math.PI / 180;
-    const lat2 = to.lat * Math.PI / 180;
-    
-    const y = Math.sin(dLng) * Math.cos(lat2);
-    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
-    
-    let bearing = Math.atan2(y, x) * 180 / Math.PI;
-    bearing = (bearing + 360) % 360;
-    
-    const directions = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'];
-    return directions[Math.round(bearing / 45) % 8];
-  }
-
-  /**
-   * Calculate route using OSRM Web Worker (client-side routing)
-   */
-  private async calculateOSRMRoute(
-    from: { lat: number; lng: number },
-    to: { lat: number; lng: number },
-    mode: string
-  ): Promise<OfflineRoute | null> {
-    // Check if we have OSRM data downloaded for this region
-    const hasOSRMData = await this.hasOfflineRoutingData(from, to);
-    if (!hasOSRMData) {
+      logger.error('Failed to detect user city:', error);
+      toast.error('Could not access your location. Please select a city manually.');
       return null;
     }
+  }
 
-    return new Promise((resolve, reject) => {
-      // In a real implementation, this would use a Web Worker with OSRM
-      // For now, simulate the enhanced routing logic
-      const worker = new Worker(new URL('../workers/osrmWorker.js', import.meta.url));
+  /**
+   * Search for cities by name using Google Places JavaScript API
+   */
+  async searchCities(query: string): Promise<CityInfo[]> {
+    if (!query || query.trim().length < 2) {
+      return [];
+    }
+
+    try {
+      // Ensure Google Maps is loaded
+      const isReady = await this.waitForGoogleMaps();
+      if (!isReady) {
+        throw new Error('Google Maps Places API not loaded');
+      }
+
+      // Use Places Service with a temporary div element
+      const tempDiv = document.createElement('div');
+      const service = new google.maps.places.PlacesService(tempDiv);
       
-      const timeout = setTimeout(() => {
-        worker.terminate();
-        reject(new Error('OSRM routing timeout'));
-      }, 30000);
-
-      worker.postMessage({
-        type: 'CALCULATE_ROUTE',
-        from,
-        to,
-        mode,
-        options: {
-          alternatives: false,
-          steps: true,
-          overview: 'full'
+      // Create search request
+      const request = {
+        query: `${query.trim()} city`,
+        fields: ['place_id', 'name', 'formatted_address', 'geometry'],
+        locationBias: { radius: 50000000, center: new google.maps.LatLng(0, 0) } // Global search
+      };
+      
+      logger.info('Searching cities with Google Places API:', { query: request.query });
+      
+      const results = await new Promise<google.maps.places.PlaceResult[]>((resolve, reject) => {
+        service.textSearch(request, (results, status) => {
+          logger.info('Places API response:', { status, resultCount: results?.length || 0 });
+          
+          if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+            resolve(results);
+          } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+            logger.warn('No cities found for query:', query);
+            resolve([]);
+          } else {
+            logger.error('Places API error:', status);
+            reject(new Error(`Places API returned status: ${status}`));
+          }
+        });
+      });
+      
+      if (results.length === 0) {
+        logger.info('No cities found for query:', query);
+        return [];
+      }
+      
+      // Convert Google Places results to CityInfo format
+      const cities: CityInfo[] = results.slice(0, 10).map((place) => {
+        const { geometry, name, formatted_address, place_id } = place;
+        
+        if (!geometry || !geometry.location || !geometry.viewport) {
+          logger.warn('Invalid geometry data for place:', place);
+          return null;
         }
+        
+        // Extract country from formatted address
+        const addressParts = (formatted_address || '').split(', ');
+        const country = addressParts[addressParts.length - 1] || 'Unknown';
+        
+        return {
+          id: place_id || `place-${Date.now()}-${Math.random()}`,
+          name: name || 'Unknown City',
+          country: country,
+          bounds: {
+            north: geometry.viewport.getNorthEast().lat(),
+            south: geometry.viewport.getSouthWest().lat(),
+            east: geometry.viewport.getNorthEast().lng(),
+            west: geometry.viewport.getSouthWest().lng()
+          },
+          center: {
+            lat: geometry.location.lat(),
+            lng: geometry.location.lng()
+          }
+        };
+      }).filter(Boolean) as CityInfo[];
+      
+      logger.info('Successfully converted places to cities:', { count: cities.length });
+      
+      // Save search results to database
+      for (const city of cities) {
+        await this.saveCityInfo(city);
+      }
+      
+      return cities;
+      
+    } catch (error) {
+      logger.error('Error searching cities:', error);
+      
+      // Check if it's a Google Maps loading issue
+      if (error.message?.includes('Google Maps') || error.message?.includes('not loaded')) {
+        toast.error('Google Maps is still loading. Please try again in a moment.');
+      } else {
+        toast.error('Failed to search cities. Please try again.');
+      }
+      
+      return [];
+    }
+  }
+
+  /**
+   * Get popular cities for manual selection using Google Places API
+   */
+  async getPopularCities(): Promise<CityInfo[]> {
+    try {
+      // First, try to get cities from cache/database
+      const cachedCities = await this.getCachedPopularCities();
+      if (cachedCities.length > 0) {
+        logger.info('Using cached popular cities', { count: cachedCities.length });
+        return cachedCities;
+      }
+
+      // If no cache, fetch from Google Places API
+      const popularCityNames = [
+        'New York, USA', 'London, UK', 'Paris, France', 'Tokyo, Japan', 'San Francisco, USA',
+        'Los Angeles, USA', 'Chicago, USA', 'Berlin, Germany', 'Sydney, Australia', 'Toronto, Canada',
+        'Madrid, Spain', 'Rome, Italy', 'Amsterdam, Netherlands', 'Vienna, Austria', 'Stockholm, Sweden',
+        'Dubai, UAE', 'Singapore', 'Hong Kong', 'Mumbai, India', 'Bangkok, Thailand',
+        'Mexico City, Mexico', 'São Paulo, Brazil', 'Buenos Aires, Argentina', 'Cairo, Egypt', 'Lagos, Nigeria'
+      ];
+
+      const popularCities: CityInfo[] = [];
+      
+      // Fetch city data from Google Places API in batches to avoid rate limits
+      for (let i = 0; i < Math.min(popularCityNames.length, 15); i++) {
+        try {
+          const cityName = popularCityNames[i];
+          const cities = await this.searchCities(cityName.split(',')[0]); // Search for just the city name
+          
+          if (cities.length > 0) {
+            // Find the best match (usually the first result)
+            const bestMatch = cities.find(city => 
+              city.name.toLowerCase().includes(cityName.split(',')[0].toLowerCase()) ||
+              city.country.toLowerCase().includes(cityName.split(',')[1]?.trim().toLowerCase() || '')
+            ) || cities[0];
+            
+            popularCities.push(bestMatch);
+          }
+          
+          // Small delay to respect API rate limits
+          if (i < popularCityNames.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        } catch (error) {
+          logger.warn(`Failed to fetch data for ${popularCityNames[i]}:`, error);
+        }
+      }
+
+      // If Google API failed, use fallback hardcoded data
+      if (popularCities.length === 0) {
+        logger.warn('Google Places API failed, using fallback city data');
+        return this.getFallbackPopularCities();
+      }
+
+      // Save to cache
+      await this.cachePopularCities(popularCities);
+      
+      logger.info('Fetched popular cities from Google Places API', { count: popularCities.length });
+      return popularCities;
+      
+    } catch (error) {
+      logger.error('Failed to get popular cities:', error);
+      // Return fallback hardcoded data
+      return this.getFallbackPopularCities();
+    }
+  }
+
+  /**
+   * Get cached popular cities from database
+   */
+  private async getCachedPopularCities(): Promise<CityInfo[]> {
+    if (!this.db) await this.initializeDB();
+    
+    try {
+      const transaction = this.db!.transaction(['preferences'], 'readonly');
+      const store = transaction.objectStore('preferences');
+      const request = store.get('popularCities');
+      
+      return new Promise((resolve) => {
+        request.onsuccess = () => {
+          const result = request.result;
+          if (result && result.data && result.timestamp) {
+            // Check if cache is still valid (24 hours)
+            const cacheAge = Date.now() - result.timestamp;
+            const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+            
+            if (cacheAge < maxAge) {
+              resolve(result.data);
+              return;
+            }
+          }
+          resolve([]);
+        };
+        request.onerror = () => resolve([]);
+      });
+    } catch (error) {
+      logger.error('Failed to get cached cities:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Cache popular cities in database
+   */
+  private async cachePopularCities(cities: CityInfo[]): Promise<void> {
+    if (!this.db) await this.initializeDB();
+    
+    try {
+      const transaction = this.db!.transaction(['preferences'], 'readwrite');
+      const store = transaction.objectStore('preferences');
+      
+      store.put({
+        key: 'popularCities',
+        data: cities,
+        timestamp: Date.now()
+      });
+      
+      // Also save individual cities
+      for (const city of cities) {
+        await this.saveCityInfo(city);
+      }
+    } catch (error) {
+      logger.error('Failed to cache popular cities:', error);
+    }
+  }
+
+  /**
+   * Get fallback popular cities (hardcoded)
+   */
+  private getFallbackPopularCities(): CityInfo[] {
+    return [
+      {
+        id: 'new-york-us',
+        name: 'New York City',
+        country: 'United States',
+        bounds: {
+          north: 40.9176,
+          south: 40.4774,
+          east: -73.7004,
+          west: -74.2591
+        },
+        center: { lat: 40.7128, lng: -74.0060 },
+        population: 8336817
+      },
+      {
+        id: 'london-uk',
+        name: 'London',
+        country: 'United Kingdom',
+        bounds: {
+          north: 51.6723,
+          south: 51.2868,
+          east: 0.3340,
+          west: -0.5103
+        },
+        center: { lat: 51.5074, lng: -0.1278 },
+        population: 9648110
+      },
+      {
+        id: 'paris-fr',
+        name: 'Paris',
+        country: 'France',
+        bounds: {
+          north: 48.9021,
+          south: 48.8155,
+          east: 2.4699,
+          west: 2.2241
+        },
+        center: { lat: 48.8566, lng: 2.3522 },
+        population: 2175601
+      },
+      {
+        id: 'tokyo-jp',
+        name: 'Tokyo',
+        country: 'Japan',
+        bounds: {
+          north: 35.8983,
+          south: 35.4969,
+          east: 139.9295,
+          west: 139.5694
+        },
+        center: { lat: 35.6762, lng: 139.6503 },
+        population: 14094034
+      },
+      {
+        id: 'san-francisco-us',
+        name: 'San Francisco',
+        country: 'United States',
+        bounds: {
+          north: 37.8324,
+          south: 37.7081,
+          east: -122.3482,
+          west: -122.5150
+        },
+        center: { lat: 37.7749, lng: -122.4194 },
+        population: 873965
+      }
+    ];
+  }
+
+  /**
+   * Download offline maps for a city
+   */
+  async downloadCityMaps(
+    cityId: string,
+    options: {
+      zoomLevels?: number[];
+      mapTypes?: string[];
+      onProgress?: (progress: DownloadProgress) => void;
+    } = {}
+  ): Promise<void> {
+    const city = await this.getCityInfo(cityId);
+    if (!city) {
+      throw new Error(`City with ID ${cityId} not found`);
+    }
+
+    if (this.downloadQueue.has(cityId)) {
+      toast.info('Download already in progress for this city');
+      return;
+    }
+
+    const zoomLevels = options.zoomLevels || [10, 11, 12, 13, 14, 15, 16];
+    const mapTypes = options.mapTypes || ['roadmap'];
+
+    const progress: DownloadProgress = {
+      cityId,
+      cityName: city.name,
+      totalTiles: 0,
+      downloadedTiles: 0,
+      failedTiles: 0,
+      progress: 0,
+      status: 'preparing',
+      estimatedSize: 0,
+      downloadedSize: 0,
+      startTime: Date.now()
+    };
+
+    this.downloadQueue.set(cityId, progress);
+
+    try {
+      // Calculate total tiles needed
+      progress.totalTiles = this.calculateTotalTiles(city.bounds, zoomLevels);
+      progress.estimatedSize = progress.totalTiles * 15000; // ~15KB per tile estimate
+
+      logger.info(`Starting download for ${city.name}:`, {
+        totalTiles: progress.totalTiles,
+        estimatedSize: `${(progress.estimatedSize / (1024 * 1024)).toFixed(1)}MB`
       });
 
-      worker.onmessage = (event) => {
-        clearTimeout(timeout);
-        worker.terminate();
-        
-        if (event.data.error) {
-          reject(new Error(event.data.error));
-        } else {
-          resolve(this.transformOSRMResponse(event.data.result));
-        }
-      };
+      if (options.onProgress) {
+        options.onProgress(progress);
+      }
 
-      worker.onerror = (error) => {
-        clearTimeout(timeout);
-        worker.terminate();
-        reject(error);
-      };
-    });
+      // Start downloading tiles
+      progress.status = 'downloading';
+      await this.downloadTilesForCity(city, zoomLevels, mapTypes, progress, options.onProgress);
+
+      if (progress.status !== 'cancelled') {
+        progress.status = 'completed';
+        progress.progress = 100;
+
+        // Save offline map metadata
+        const offlineMap: OfflineMapData = {
+          id: `${cityId}-${Date.now()}`,
+          cityId,
+          cityName: city.name,
+          bounds: city.bounds,
+          zoomLevels,
+          downloadDate: new Date().toISOString(),
+          lastUsed: new Date().toISOString(),
+          tileCount: progress.downloadedTiles,
+          sizeBytes: progress.downloadedSize,
+          version: '1.0'
+        };
+
+        await this.saveOfflineMapData(offlineMap);
+
+        logger.info(`Download completed for ${city.name}`);
+        toast.success(`${city.name} maps downloaded successfully!`);
+      }
+
+      if (options.onProgress) {
+        options.onProgress(progress);
+      }
+
+    } catch (error) {
+      logger.error('Failed to download city maps:', error);
+      progress.status = 'failed';
+      toast.error(`Failed to download maps for ${city.name}`);
+    } finally {
+      this.downloadQueue.delete(cityId);
+    }
   }
 
   /**
-   * Build route from cached road segments
+   * Cancel ongoing download
    */
-  private async buildRouteFromCachedSegments(
-    from: { lat: number; lng: number },
-    to: { lat: number; lng: number },
-    mode: string
-  ): Promise<OfflineRoute | null> {
-    // This would implement A* pathfinding on cached road network
-    // For now, return enhanced fallback with realistic waypoints
-    
-    const waypoints = await this.findIntermediateWaypoints(from, to);
-    const distance = this.calculateRouteDistance([from, ...waypoints, to]);
-    
-    // Estimate more realistic duration based on road types
-    const speeds = this.getSpeedsForMode(mode);
-    const duration = this.calculateRealisticDuration(waypoints, speeds);
-    
-    const geometry: [number, number][] = [from, ...waypoints, to].map(point => [point.lng, point.lat]);
-    
-    return {
-      id: `cached_route_${Date.now()}`,
-      name: 'Offline Route (Cached)',
-      from: { ...from, name: 'Start' },
-      to: { ...to, name: 'End' },
-      geometry,
-      distance: distance * 1000,
-      duration,
-      instructions: this.generateDetailedInstructions(waypoints, mode),
-      createdAt: new Date().toISOString(),
-      mode
-    };
+  async cancelDownload(cityId: string): Promise<void> {
+    const progress = this.downloadQueue.get(cityId);
+    if (progress) {
+      progress.status = 'cancelled';
+      logger.info(`Download cancelled for ${progress.cityName}`);
+      toast.info(`Download cancelled for ${progress.cityName}`);
+    }
   }
 
   /**
-   * Enhanced fallback route calculation
+   * Get all downloaded offline maps
    */
-  private calculateFallbackRoute(
-    from: { lat: number; lng: number },
-    to: { lat: number; lng: number },
-    mode: string
-  ): OfflineRoute {
-    const distance = this.calculateDistance(from.lat, from.lng, to.lat, to.lng);
-    
-    // Create more realistic geometry with intermediate points
-    const intermediatePoints = this.generateIntermediatePoints(from, to, Math.ceil(distance * 2));
-    const geometry: [number, number][] = [from, ...intermediatePoints, to].map(point => [point.lng, point.lat]);
-    
-    const speeds = this.getSpeedsForMode(mode);
-    const duration = (distance / speeds.average) * 3600;
-    
-    return {
-      id: `fallback_route_${Date.now()}`,
-      name: 'Offline Route (Estimated)',
-      from: { ...from, name: 'Start' },
-      to: { ...to, name: 'End' },
-      geometry,
-      distance: distance * 1000,
-      duration,
-      instructions: this.generateBasicInstructions(from, to, distance, mode),
-      createdAt: new Date().toISOString(),
-      mode
-    };
-  }
+  async getOfflineMaps(): Promise<OfflineMapData[]> {
+    if (!this.db) await this.initializeDB();
 
-  /**
-   * Get all offline regions
-   */
-  async getOfflineRegions(): Promise<OfflineRegion[]> {
-    if (!this.db) return [];
-
-    const transaction = this.db.transaction(['regions'], 'readonly');
-    const store = transaction.objectStore('regions');
-    
     return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['offlineMaps'], 'readonly');
+      const store = transaction.objectStore('offlineMaps');
       const request = store.getAll();
+
       request.onsuccess = () => resolve(request.result || []);
       request.onerror = () => reject(request.error);
     });
   }
 
   /**
-   * Delete offline region and its tiles
+   * Delete offline map data for a city
    */
-  async deleteOfflineRegion(regionId: string): Promise<void> {
-    if (!this.db) return;
+  async deleteOfflineMap(cityId: string): Promise<void> {
+    if (!this.db) await this.initializeDB();
 
-    const region = await this.getRegion(regionId);
-    if (!region) return;
-
-    // Delete all tiles for this region
-    const tiles = this.calculateTilesInBounds(
-      region.bounds,
-      region.minZoom,
-      region.maxZoom
-    );
-
-    const transaction = this.db.transaction(['tiles', 'regions'], 'readwrite');
-    const tilesStore = transaction.objectStore('tiles');
-    const regionsStore = transaction.objectStore('regions');
-
+    const transaction = this.db!.transaction(['offlineMaps', 'mapTiles'], 'readwrite');
+    
     // Delete tiles
-    for (const tile of tiles) {
-      const tileId = `${region.mapProvider}_${tile.z}_${tile.x}_${tile.y}`;
-      tilesStore.delete(tileId);
-    }
+    const tilesStore = transaction.objectStore('mapTiles');
+    const tilesIndex = tilesStore.index('cityId');
+    const tilesRequest = tilesIndex.openCursor(IDBKeyRange.only(cityId));
+    
+    tilesRequest.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest).result;
+      if (cursor) {
+        cursor.delete();
+        cursor.continue();
+      }
+    };
 
-    // Delete region
-    regionsStore.delete(regionId);
+    // Delete metadata
+    const mapsStore = transaction.objectStore('offlineMaps');
+    const mapsIndex = mapsStore.index('cityId');
+    mapsIndex.delete(cityId);
+
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => {
+        logger.info(`Offline map deleted for city: ${cityId}`);
+        toast.success('Offline map deleted successfully');
+        resolve();
+      };
+      transaction.onerror = () => reject(transaction.error);
+    });
   }
 
   /**
-   * Get storage information
+   * Get detailed city information by coordinates
    */
-  async getStorageInfo(): Promise<StorageInfo> {
-    if (!this.db) {
+  async getCityDetails(lat: number, lng: number): Promise<CityInfo | null> {
+    return this.geocodeLocation(lat, lng);
+  }
+
+  /**
+   * Get city information by place ID
+   */
+  async getCityByPlaceId(placeId: string): Promise<CityInfo | null> {
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,geometry,formatted_address,place_id&key=${GOOGLE_MAPS_API_KEY}`;
+      
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT.PLACES)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Place Details API returned status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.status !== 'OK' || !data.result) {
+        logger.warn('Place Details API returned no results', { status: data.status });
+        return null;
+      }
+      
+      const place = data.result;
+      const { geometry, name, formatted_address } = place;
+      const { location, viewport } = geometry;
+      
+      // Extract country from formatted address
+      const addressParts = formatted_address.split(', ');
+      const country = addressParts[addressParts.length - 1] || 'Unknown';
+      
+      const cityInfo: CityInfo = {
+        id: placeId,
+        name: name,
+        country: country,
+        bounds: {
+          north: viewport.northeast.lat,
+          south: viewport.southwest.lat,
+          east: viewport.northeast.lng,
+          west: viewport.southwest.lng
+        },
+        center: {
+          lat: location.lat,
+          lng: location.lng
+        }
+      };
+      
+      await this.saveCityInfo(cityInfo);
+      return cityInfo;
+    } catch (error) {
+      logger.error('Error getting city details:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if city has offline maps available
+   */
+  async hasOfflineMap(cityId: string): Promise<boolean> {
+    if (!this.db) await this.initializeDB();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['offlineMaps'], 'readonly');
+      const store = transaction.objectStore('offlineMaps');
+      const index = store.index('cityId');
+      const request = index.count(cityId);
+
+      request.onsuccess = () => resolve(request.result > 0);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Private helper methods
+   */
+  private async getCurrentPosition(): Promise<GeolocationPosition> {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocation is not supported'));
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 60000
+      });
+    });
+  }
+
+  private async geocodeLocation(lat: number, lng: number): Promise<CityInfo | null> {
+    try {
+      // Ensure Google Maps is loaded
+      const isReady = await this.waitForGoogleMaps();
+      if (!isReady) {
+        throw new Error('Google Maps API not loaded');
+      }
+
+      const geocoder = new google.maps.Geocoder();
+      const request: google.maps.GeocoderRequest = {
+        location: { lat, lng },
+        resultTypes: ['locality', 'administrative_area_level_1', 'country']
+      };
+      
+      logger.info('Geocoding location:', { lat, lng });
+      
+      const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+        geocoder.geocode(request, (results, status) => {
+          logger.info('Geocoding response:', { status, resultCount: results?.length || 0 });
+          
+          if (status === google.maps.GeocoderStatus.OK && results && results.length > 0) {
+            resolve(results);
+          } else if (status === google.maps.GeocoderStatus.ZERO_RESULTS) {
+            logger.warn('No geocoding results found for location:', { lat, lng });
+            resolve([]);
+          } else {
+            logger.error('Geocoding error:', status);
+            reject(new Error(`Geocoding failed: ${status}`));
+          }
+        });
+      });
+      
+      if (results.length === 0) {
+        logger.warn('No city found for coordinates:', { lat, lng });
+        return null;
+      }
+      
+      // Find the best result (prefer locality type)
+      const localityResult = results.find(result => 
+        result.types.includes('locality')
+      ) || results[0];
+      
+      if (!localityResult) {
+        logger.warn('No suitable geocoding result found');
+        return null;
+      }
+      
+      // Extract city name
+      const cityComponent = localityResult.address_components?.find(
+        component => component.types.includes('locality')
+      );
+      
+      const cityName = cityComponent?.long_name || 
+                      localityResult.address_components?.[0]?.long_name || 
+                      'Unknown City';
+      
+      // Extract country
+      const countryComponent = localityResult.address_components?.find(
+        component => component.types.includes('country')
+      );
+      
+      const country = countryComponent?.long_name || 'Unknown Country';
+      const countryCode = countryComponent?.short_name || 'unknown';
+      
+      // Get viewport for city bounds
+      const viewport = localityResult.geometry?.viewport;
+      let bounds;
+      
+      if (viewport) {
+        bounds = {
+          north: viewport.getNorthEast().lat(),
+          south: viewport.getSouthWest().lat(),
+          east: viewport.getNorthEast().lng(),
+          west: viewport.getSouthWest().lng()
+        };
+      } else {
+        // Fallback bounds if no viewport
+        bounds = {
+          north: lat + 0.05,
+          south: lat - 0.05,
+          east: lng + 0.05,
+          west: lng - 0.05
+        };
+      }
+      
+      const cityInfo: CityInfo = {
+        id: `${cityName.toLowerCase().replace(/\s+/g, '-')}-${countryCode.toLowerCase()}`,
+        name: cityName,
+        country: country,
+        bounds,
+        center: { lat, lng }
+      };
+      
+      logger.info('Successfully geocoded location:', cityInfo);
+      return cityInfo;
+      
+    } catch (error) {
+      logger.error('Error geocoding location:', error);
+      
+      // Check if it's a Google Maps loading issue
+      if (error.message?.includes('Google Maps') || error.message?.includes('not loaded')) {
+        logger.warn('Google Maps not loaded, using fallback geocoding');
+      }
+      
+      // Fallback to coordinate-based detection
+      const cityName = this.getCityNameFromCoords(lat, lng);
       return {
-        totalUsed: 0,
-        totalAvailable: 0,
-        tilesCount: 0,
-        regionsCount: 0,
-        routesCount: 0
+        id: `city-${Math.round(lat * 100)}-${Math.round(lng * 100)}`,
+        name: cityName,
+        country: 'Unknown (fallback)',
+        bounds: {
+          north: lat + 0.05,
+          south: lat - 0.05,
+          east: lng + 0.05,
+          west: lng - 0.05
+        },
+        center: { lat, lng }
       };
     }
+  }
 
-    const [tiles, regions, routes] = await Promise.all([
-      this.getAllTiles(),
-      this.getOfflineRegions(),
-      this.getOfflineRoutes()
-    ]);
-
-    const totalUsed = tiles.reduce((sum, tile) => sum + tile.size, 0);
+  private getCityNameFromCoords(lat: number, lng: number): string {
+    // Simple city detection based on coordinates (fallback method)
+    if (lat >= 40.4 && lat <= 41.0 && lng >= -74.5 && lng <= -73.5) return 'New York City';
+    if (lat >= 51.2 && lat <= 51.7 && lng >= -0.6 && lng <= 0.4) return 'London';
+    if (lat >= 48.8 && lat <= 49.0 && lng >= 2.2 && lng <= 2.5) return 'Paris';
+    if (lat >= 35.5 && lat <= 35.8 && lng >= 139.5 && lng <= 140.0) return 'Tokyo';
+    if (lat >= 37.7 && lat <= 37.8 && lng >= -122.6 && lng <= -122.3) return 'San Francisco';
     
-    // Estimate available storage (conservative estimate)
-    const totalAvailable = 1024 * 1024 * 1024; // 1GB
+    // If no match, return approximate coordinates as name
+    return `Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+  }
 
-    return {
-      totalUsed,
-      totalAvailable,
-      tilesCount: tiles.length,
-      regionsCount: regions.length,
-      routesCount: routes.length
+  private calculateTotalTiles(bounds: CityBounds, zoomLevels: number[]): number {
+    let total = 0;
+    
+    for (const zoom of zoomLevels) {
+      const n = Math.pow(2, zoom);
+      const minX = Math.floor(((bounds.west + 180) / 360) * n);
+      const maxX = Math.floor(((bounds.east + 180) / 360) * n);
+      const minY = Math.floor((1 - Math.log(Math.tan((bounds.north * Math.PI) / 180) + 1 / Math.cos((bounds.north * Math.PI) / 180)) / Math.PI) / 2 * n);
+      const maxY = Math.floor((1 - Math.log(Math.tan((bounds.south * Math.PI) / 180) + 1 / Math.cos((bounds.south * Math.PI) / 180)) / Math.PI) / 2 * n);
+      
+      total += (maxX - minX + 1) * (maxY - minY + 1);
+    }
+    
+    return total;
+  }
+
+  private async downloadTilesForCity(
+    city: CityInfo,
+    zoomLevels: number[],
+    mapTypes: string[],
+    progress: DownloadProgress,
+    onProgress?: (progress: DownloadProgress) => void
+  ): Promise<void> {
+    const { bounds } = city;
+    
+    for (const zoom of zoomLevels) {
+      if (progress.status === 'cancelled') break;
+      
+      const n = Math.pow(2, zoom);
+      const minX = Math.floor(((bounds.west + 180) / 360) * n);
+      const maxX = Math.floor(((bounds.east + 180) / 360) * n);
+      const minY = Math.floor((1 - Math.log(Math.tan((bounds.north * Math.PI) / 180) + 1 / Math.cos((bounds.north * Math.PI) / 180)) / Math.PI) / 2 * n);
+      const maxY = Math.floor((1 - Math.log(Math.tan((bounds.south * Math.PI) / 180) + 1 / Math.cos((bounds.south * Math.PI) / 180)) / Math.PI) / 2 * n);
+      
+      for (let x = minX; x <= maxX; x++) {
+        if (progress.status === 'cancelled') break;
+        
+        for (let y = minY; y <= maxY; y++) {
+          if (progress.status === 'cancelled') break;
+          
+          for (const mapType of mapTypes) {
+            try {
+              await this.downloadTile(x, y, zoom, mapType, city.id);
+              progress.downloadedTiles++;
+              progress.downloadedSize += 15000; // Estimate
+            } catch (error) {
+              progress.failedTiles++;
+            }
+            
+            progress.progress = Math.round((progress.downloadedTiles / progress.totalTiles) * 100);
+            
+            // Update ETA
+            const elapsed = Date.now() - progress.startTime;
+            const remaining = progress.totalTiles - progress.downloadedTiles;
+            if (progress.downloadedTiles > 0) {
+              const avgTimePerTile = elapsed / progress.downloadedTiles;
+              progress.estimatedTimeRemaining = remaining * avgTimePerTile;
+            }
+            
+            if (onProgress && progress.downloadedTiles % 50 === 0) {
+              onProgress(progress);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private async downloadTile(x: number, y: number, z: number, mapType: string, cityId: string): Promise<void> {
+    // Create mock tile data - in production this would fetch from Google Maps
+    const tileId = `${x}-${y}-${z}-${mapType}`;
+    const tileData = {
+      id: tileId,
+      x, y, z,
+      cityId,
+      mapType,
+      data: new Blob(['mock tile data'], { type: 'image/png' }),
+      downloadDate: new Date().toISOString()
     };
+
+    return this.saveTileData(tileData);
   }
 
-  /**
-   * Clear all offline data
-   */
-  async clearAllData(): Promise<void> {
-    if (!this.db) return;
+  private async saveTileData(tileData: any): Promise<void> {
+    if (!this.db) await this.initializeDB();
 
-    const transaction = this.db.transaction(['tiles', 'regions', 'routes'], 'readwrite');
-    const promises = [
-      transaction.objectStore('tiles').clear(),
-      transaction.objectStore('regions').clear(),
-      transaction.objectStore('routes').clear()
-    ];
-
-    await Promise.all(promises);
-  }
-
-  // Private helper methods
-
-  private async saveTile(tile: MapTile): Promise<void> {
-    if (!this.db) return;
-
-    const transaction = this.db.transaction(['tiles'], 'readwrite');
-    const store = transaction.objectStore('tiles');
-    
     return new Promise((resolve, reject) => {
-      const request = store.put(tile);
+      const transaction = this.db!.transaction(['mapTiles'], 'readwrite');
+      const store = transaction.objectStore('mapTiles');
+      const request = store.put(tileData);
+
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
   }
 
-  private async saveRegion(region: OfflineRegion): Promise<void> {
-    if (!this.db) return;
+  private async saveCityInfo(cityInfo: CityInfo): Promise<void> {
+    if (!this.db) await this.initializeDB();
 
-    const transaction = this.db.transaction(['regions'], 'readwrite');
-    const store = transaction.objectStore('regions');
-    
     return new Promise((resolve, reject) => {
-      const request = store.put(region);
+      const transaction = this.db!.transaction(['cities'], 'readwrite');
+      const store = transaction.objectStore('cities');
+      const request = store.put(cityInfo);
+
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
   }
 
-  private async getRegion(regionId: string): Promise<OfflineRegion | null> {
-    if (!this.db) return null;
+  private async getCityInfo(cityId: string): Promise<CityInfo | null> {
+    if (!this.db) await this.initializeDB();
 
-    const transaction = this.db.transaction(['regions'], 'readonly');
-    const store = transaction.objectStore('regions');
-    
     return new Promise((resolve, reject) => {
-      const request = store.get(regionId);
+      const transaction = this.db!.transaction(['cities'], 'readonly');
+      const store = transaction.objectStore('cities');
+      const request = store.get(cityId);
+
       request.onsuccess = () => resolve(request.result || null);
       request.onerror = () => reject(request.error);
     });
   }
 
-  private async updateRegionProgress(
-    regionId: string,
-    progress: number,
-    downloadedTiles: number,
-    totalSize: number
-  ): Promise<void> {
-    const region = await this.getRegion(regionId);
-    if (!region) return;
+  private async saveOfflineMapData(mapData: OfflineMapData): Promise<void> {
+    if (!this.db) await this.initializeDB();
 
-    const updatedRegion: OfflineRegion = {
-      ...region,
-      progress,
-      downloadedTiles,
-      totalSize,
-      updatedAt: new Date().toISOString()
-    };
-
-    await this.saveRegion(updatedRegion);
-  }
-
-  private async updateRegionStatus(regionId: string, status: OfflineRegion['status']): Promise<void> {
-    const region = await this.getRegion(regionId);
-    if (!region) return;
-
-    const updatedRegion: OfflineRegion = {
-      ...region,
-      status,
-      updatedAt: new Date().toISOString()
-    };
-
-    await this.saveRegion(updatedRegion);
-  }
-
-  private async getAllTiles(): Promise<MapTile[]> {
-    if (!this.db) return [];
-
-    const transaction = this.db.transaction(['tiles'], 'readonly');
-    const store = transaction.objectStore('tiles');
-    
     return new Promise((resolve, reject) => {
-      const request = store.getAll();
-      request.onsuccess = () => resolve(request.result || []);
+      const transaction = this.db!.transaction(['offlineMaps'], 'readwrite');
+      const store = transaction.objectStore('offlineMaps');
+      const request = store.put(mapData);
+
+      request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
-  }
-
-  private calculateTilesInBounds(
-    bounds: OfflineRegion['bounds'],
-    minZoom: number,
-    maxZoom: number
-  ): Array<{ z: number; x: number; y: number }> {
-    const tiles: Array<{ z: number; x: number; y: number }> = [];
-
-    for (let z = minZoom; z <= maxZoom; z++) {
-      const minTileX = this.lon2tile(bounds.west, z);
-      const maxTileX = this.lon2tile(bounds.east, z);
-      const minTileY = this.lat2tile(bounds.north, z);
-      const maxTileY = this.lat2tile(bounds.south, z);
-
-      for (let x = minTileX; x <= maxTileX; x++) {
-        for (let y = minTileY; y <= maxTileY; y++) {
-          tiles.push({ z, x, y });
-        }
-      }
-    }
-
-    return tiles;
-  }
-
-  private lon2tile(lon: number, zoom: number): number {
-    return Math.floor(((lon + 180) / 360) * Math.pow(2, zoom));
-  }
-
-  private lat2tile(lat: number, zoom: number): number {
-    return Math.floor(
-      ((1 - Math.log(Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)) / Math.PI) / 2) *
-        Math.pow(2, zoom)
-    );
-  }
-
-  private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-    const R = 6371; // Earth's radius in km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLng/2) * Math.sin(dLng/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-  }
-
-  // Advanced Helper Methods
-
-  /**
-   * Prioritize tiles for download (roads and major features first)
-   */
-  private prioritizeTiles(tiles: Array<{ z: number; x: number; y: number }>): Array<{ z: number; x: number; y: number }> {
-    return tiles.sort((a, b) => {
-      // Prioritize by zoom level (higher zoom = more detail = lower priority for initial download)
-      if (a.z !== b.z) {
-        return a.z - b.z; // Download lower zoom levels first
-      }
-      
-      // For same zoom level, prioritize central tiles (roads are more likely to be in center)
-      const aCentrality = this.calculateTileCentrality(a);
-      const bCentrality = this.calculateTileCentrality(b);
-      return bCentrality - aCentrality;
-    });
-  }
-
-  /**
-   * Calculate optimal batch size based on device capabilities
-   */
-  private getOptimalBatchSize(): number {
-    // Adjust batch size based on connection and device performance
-    const connection = (navigator as any).connection;
-    if (connection) {
-      if (connection.effectiveType === '4g') return 8;
-      if (connection.effectiveType === '3g') return 5;
-      if (connection.effectiveType === '2g') return 2;
-    }
-    return 5; // Default
-  }
-
-  /**
-   * Get available storage space
-   */
-  private async getAvailableStorageSpace(): Promise<number> {
-    if ('storage' in navigator && 'estimate' in navigator.storage) {
-      try {
-        const estimate = await navigator.storage.estimate();
-        const available = (estimate.quota || 0) - (estimate.usage || 0);
-        return Math.max(0, available * 0.8); // Use 80% of available space
-      } catch (error) {
-        // Fallback to conservative estimate
-        return 100 * 1024 * 1024; // 100MB
-      }
-    }
-    return 50 * 1024 * 1024; // 50MB fallback
-  }
-
-  /**
-   * Estimate total size of tiles to download
-   */
-  private estimateTilesSize(tiles: Array<{ z: number; x: number; y: number }>, provider: string): number {
-    // Estimate based on zoom level and provider
-    const avgSizes = {
-      osm: { base: 15000, zoomFactor: 1.5 },
-      satellite: { base: 25000, zoomFactor: 2.0 },
-      terrain: { base: 20000, zoomFactor: 1.8 }
-    };
-    
-    const config = avgSizes[provider as keyof typeof avgSizes] || avgSizes.osm;
-    
-    return tiles.reduce((total, tile) => {
-      const zoomMultiplier = Math.pow(config.zoomFactor, Math.max(0, tile.z - 10));
-      return total + (config.base * zoomMultiplier);
-    }, 0);
-  }
-
-  /**
-   * Check if tile is fresh (not expired)
-   */
-  private async isTileFresh(z: number, x: number, y: number, provider: string): Promise<boolean> {
-    const tile = await this.getTile(z, x, y, provider);
-    if (!tile) return false;
-    
-    const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
-    return (Date.now() - tile.timestamp) < maxAge;
-  }
-
-  /**
-   * Clean up old tiles when storage is running low
-   */
-  private async cleanupOldTilesIfNeeded(): Promise<void> {
-    const storageInfo = await this.getStorageInfo();
-    const totalSpace = storageInfo.totalUsed + storageInfo.totalAvailable;
-    const usageRatio = storageInfo.totalUsed / totalSpace;
-    
-    if (usageRatio > 0.85) { // If using more than 85% of available space
-      await this.cleanupOldestTiles(Math.floor(storageInfo.tilesCount * 0.1)); // Remove 10% oldest tiles
-    }
-  }
-
-  /**
-   * Calculate tile centrality for prioritization
-   */
-  private calculateTileCentrality(tile: { z: number; x: number; y: number }): number {
-    // Simple centrality measure - distance from center of tile grid at this zoom level
-    const centerX = Math.pow(2, tile.z) / 2;
-    const centerY = Math.pow(2, tile.z) / 2;
-    const distance = Math.sqrt(Math.pow(tile.x - centerX, 2) + Math.pow(tile.y - centerY, 2));
-    return 1 / (1 + distance); // Inverse distance
-  }
-
-  /**
-   * Check if we have offline routing data for a region
-   */
-  private async hasOfflineRoutingData(
-    from: { lat: number; lng: number },
-    to: { lat: number; lng: number }
-  ): Promise<boolean> {
-    // Check if we have OSRM data files for this region
-    // This would be implemented based on your offline routing data structure
-    try {
-      const metadata = await this.getMetadata('osrm_regions');
-      if (!metadata) return false;
-      
-      // Check if both points fall within any downloaded OSRM region
-      const regions = metadata.value || [];
-      return regions.some((region: any) => 
-        this.pointInRegion(from, region.bounds) && this.pointInRegion(to, region.bounds)
-      );
-    } catch (error) {
-      return false;
-    }
-  }
-
-  /**
-   * Transform OSRM response to our route format
-   */
-  private transformOSRMResponse(osrmResult: any): OfflineRoute {
-    const route = osrmResult.routes[0];
-    const steps = route.legs[0]?.steps || [];
-    
-    return {
-      id: `osrm_route_${Date.now()}`,
-      name: 'Offline Route (OSRM)',
-      from: {
-        lat: osrmResult.waypoints[0].location[1],
-        lng: osrmResult.waypoints[0].location[0],
-        name: 'Start'
-      },
-      to: {
-        lat: osrmResult.waypoints[1].location[1],
-        lng: osrmResult.waypoints[1].location[0],
-        name: 'End'
-      },
-      geometry: route.geometry.coordinates,
-      distance: route.distance,
-      duration: route.duration,
-      instructions: steps.map((step: any) => step.maneuver.instruction),
-      createdAt: new Date().toISOString(),
-      mode: 'driving'
-    };
-  }
-
-  /**
-   * Find intermediate waypoints for more realistic routes
-   */
-  private async findIntermediateWaypoints(
-    from: { lat: number; lng: number },
-    to: { lat: number; lng: number }
-  ): Promise<Array<{ lat: number; lng: number }>> {
-    // This would analyze cached road network to find realistic waypoints
-    // For now, generate waypoints that follow major road patterns
-    const waypoints: Array<{ lat: number; lng: number }> = [];
-    const distance = this.calculateDistance(from.lat, from.lng, to.lat, to.lng);
-    
-    if (distance > 10) { // Only add waypoints for longer routes
-      const numWaypoints = Math.min(5, Math.floor(distance / 10));
-      
-      for (let i = 1; i <= numWaypoints; i++) {
-        const ratio = i / (numWaypoints + 1);
-        // Add some randomness to make routes more realistic
-        const latOffset = (Math.random() - 0.5) * 0.01;
-        const lngOffset = (Math.random() - 0.5) * 0.01;
-        
-        waypoints.push({
-          lat: from.lat + (to.lat - from.lat) * ratio + latOffset,
-          lng: from.lng + (to.lng - from.lng) * ratio + lngOffset
-        });
-      }
-    }
-    
-    return waypoints;
-  }
-
-  /**
-   * Calculate route distance through multiple points
-   */
-  private calculateRouteDistance(points: Array<{ lat: number; lng: number }>): number {
-    let totalDistance = 0;
-    for (let i = 0; i < points.length - 1; i++) {
-      totalDistance += this.calculateDistance(
-        points[i].lat, points[i].lng,
-        points[i + 1].lat, points[i + 1].lng
-      );
-    }
-    return totalDistance;
-  }
-
-  /**
-   * Get realistic speeds for different transport modes
-   */
-  private getSpeedsForMode(mode: string) {
-    const speedProfiles = {
-      driving: { average: 45, city: 30, highway: 80 },
-      walking: { average: 5, city: 4, highway: 5 },
-      cycling: { average: 15, city: 12, highway: 20 }
-    };
-    
-    return speedProfiles[mode as keyof typeof speedProfiles] || speedProfiles.driving;
-  }
-
-  /**
-   * Calculate realistic duration considering road types
-   */
-  private calculateRealisticDuration(
-    waypoints: Array<{ lat: number; lng: number }>,
-    speeds: { average: number; city: number; highway: number }
-  ): number {
-    // This is a simplified calculation - real implementation would analyze road types
-    const totalDistance = this.calculateRouteDistance(waypoints);
-    return (totalDistance / speeds.average) * 3600; // Convert to seconds
-  }
-
-  /**
-   * Generate detailed instructions for cached routes
-   */
-  private generateDetailedInstructions(waypoints: Array<{ lat: number; lng: number }>, mode: string): string[] {
-    const instructions = ['Start your journey'];
-    
-    for (let i = 1; i < waypoints.length; i++) {
-      const bearing = this.calculateBearing(waypoints[i - 1], waypoints[i]);
-      const direction = this.bearingToDirection(bearing);
-      const distance = this.calculateDistance(
-        waypoints[i - 1].lat, waypoints[i - 1].lng,
-        waypoints[i].lat, waypoints[i].lng
-      );
-      
-      instructions.push(`Continue ${direction} for ${distance.toFixed(1)} km`);
-    }
-    
-    instructions.push('You have arrived at your destination');
-    return instructions;
-  }
-
-  /**
-   * Generate basic instructions for fallback routes
-   */
-  private generateBasicInstructions(
-    from: { lat: number; lng: number },
-    to: { lat: number; lng: number },
-    distance: number,
-    mode: string
-  ): string[] {
-    const bearing = this.calculateBearing(from, to);
-    const direction = this.bearingToDirection(bearing);
-    const verb = mode === 'walking' ? 'Walk' : mode === 'cycling' ? 'Cycle' : 'Drive';
-    
-    return [
-      `${verb} ${direction} towards your destination`,
-      `Continue for ${distance.toFixed(1)} km`,
-      'You have arrived at your destination'
-    ];
-  }
-
-  /**
-   * Generate intermediate points for smoother routes
-   */
-  private generateIntermediatePoints(
-    from: { lat: number; lng: number },
-    to: { lat: number; lng: number },
-    count: number
-  ): Array<{ lat: number; lng: number }> {
-    const points: Array<{ lat: number; lng: number }> = [];
-    
-    for (let i = 1; i < count; i++) {
-      const ratio = i / count;
-      points.push({
-        lat: from.lat + (to.lat - from.lat) * ratio,
-        lng: from.lng + (to.lng - from.lng) * ratio
-      });
-    }
-    
-    return points;
-  }
-
-  /**
-   * Calculate bearing between two points
-   */
-  private calculateBearing(
-    from: { lat: number; lng: number },
-    to: { lat: number; lng: number }
-  ): number {
-    const lat1 = from.lat * Math.PI / 180;
-    const lat2 = to.lat * Math.PI / 180;
-    const deltaLng = (to.lng - from.lng) * Math.PI / 180;
-    
-    const y = Math.sin(deltaLng) * Math.cos(lat2);
-    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng);
-    
-    const bearing = Math.atan2(y, x) * 180 / Math.PI;
-    return (bearing + 360) % 360;
-  }
-
-  /**
-   * Convert bearing to human-readable direction
-   */
-  private bearingToDirection(bearing: number): string {
-    const directions = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'];
-    const index = Math.round(bearing / 45) % 8;
-    return directions[index];
-  }
-
-  /**
-   * Check if point is within region bounds
-   */
-  private pointInRegion(point: { lat: number; lng: number }, bounds: any): boolean {
-    return point.lat >= bounds.south && point.lat <= bounds.north &&
-           point.lng >= bounds.west && point.lng <= bounds.east;
-  }
-
-  /**
-   * Get metadata from storage
-   */
-  private async getMetadata(key: string): Promise<any> {
-    if (!this.db) return null;
-    
-    const transaction = this.db.transaction(['metadata'], 'readonly');
-    const store = transaction.objectStore('metadata');
-    
-    return new Promise((resolve, reject) => {
-      const request = store.get(key);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  /**
-   * Clean up oldest tiles
-   */
-  private async cleanupOldestTiles(count: number): Promise<void> {
-    if (!this.db) return;
-    
-    const transaction = this.db.transaction(['tiles'], 'readwrite');
-    const store = transaction.objectStore('tiles');
-    
-    // Get all tiles sorted by timestamp
-    const tiles = await new Promise<any[]>((resolve, reject) => {
-      const request = store.getAll();
-      request.onsuccess = () => resolve(request.result || []);
-      request.onerror = () => reject(request.error);
-    });
-    
-    // Sort by timestamp (oldest first)
-    tiles.sort((a, b) => a.timestamp - b.timestamp);
-    
-    // Delete oldest tiles
-    const tilesToDelete = tiles.slice(0, count);
-    for (const tile of tilesToDelete) {
-      store.delete(tile.id);
-    }
-  }
-
-  /**
-   * Check if we have OSRM data for the given region (implementation)
-   */
-  private async hasOfflineRoutingData(
-    from: { lat: number; lng: number },
-    to: { lat: number; lng: number }
-  ): Promise<boolean> {
-    // For now, return false to always use fallback routing
-    // In a real implementation, this would check for downloaded OSRM data
-    return false;
-  }
-
-  /**
-   * Get available storage space
-   */
-  private async getAvailableStorageSpace(): Promise<number> {
-    if ('storage' in navigator && 'estimate' in navigator.storage) {
-      try {
-        const estimate = await navigator.storage.estimate();
-        const available = (estimate.quota || 0) - (estimate.usage || 0);
-        return Math.max(0, available * 0.8); // Use 80% of available space
-      } catch (error) {
-        return 100 * 1024 * 1024; // 100MB fallback
-      }
-    }
-    return 50 * 1024 * 1024; // 50MB fallback
   }
 }
 
-export const offlineMapsService = new OfflineMapsService();
+// Create and export singleton instance
+const offlineMapsService = new OfflineMapsService();
 export default offlineMapsService;

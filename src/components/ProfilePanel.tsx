@@ -8,6 +8,7 @@ import {
   Download,
   Upload,
   Settings,
+  WifiOff,
   Crown,
   MapPin,
   Clock,
@@ -43,6 +44,7 @@ interface ProfilePanelProps {
   onOpenSafety?: () => void;
   onOpenAnalytics?: () => void;
   onOpenGamification?: () => void;
+  onOpenOfflineMaps?: () => void;
 }
 
 interface UserStats {
@@ -67,7 +69,7 @@ interface Achievement {
   maxProgress?: number;
 }
 
-export function ProfilePanel({ onBack, onOpenSettings, onOpenSafety, onOpenAnalytics, onOpenGamification }: ProfilePanelProps) {
+export function ProfilePanel({ onBack, onOpenSettings, onOpenSafety, onOpenAnalytics, onOpenGamification, onOpenOfflineMaps }: ProfilePanelProps) {
   const { isAuthenticated, user, updateProfile, logout } = useUser();
   const [activeTab, setActiveTab] = useState('overview');
   const [editOpen, setEditOpen] = useState(false);
@@ -437,6 +439,16 @@ export function ProfilePanel({ onBack, onOpenSettings, onOpenSafety, onOpenAnaly
                     <Upload className="w-4 h-4 mr-2" />
                     Import Data
                   </Button>
+                  {onOpenOfflineMaps && (
+                    <Button
+                      variant="outline"
+                      className="justify-start text-blue-600 border-blue-200 hover:bg-blue-50"
+                      onClick={onOpenOfflineMaps}
+                    >
+                      <WifiOff className="w-4 h-4 mr-2" />
+                      Offline Maps
+                    </Button>
+                  )}
                   {onOpenSafety && (
                     <Button
                       variant="outline"

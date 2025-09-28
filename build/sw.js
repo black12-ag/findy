@@ -1,498 +1,471 @@
-// PathFinder Pro Service Worker
-const CACHE_NAME = 'pathfinder-pro-v1';
-const STATIC_CACHE_NAME = 'pathfinder-static-v1';
-const DYNAMIC_CACHE_NAME = 'pathfinder-dynamic-v1';
-const MAP_CACHE_NAME = 'pathfinder-maps-v1';
+/**
+ * 🔄 Findy Navigation App - Advanced Service Worker
+ * 
+ * Provides comprehensive offline functionality including:
+ * - App shell caching
+ * - Dynamic content caching
+ * - Map tiles caching
+ * - API response caching
+ * - Background sync
+ * - Push notifications
+ */
 
-// Define what to cache
-const STATIC_ASSETS = [
+const CACHE_VERSION = 'findy-v2.0.0';
+const STATIC_CACHE_NAME = `${CACHE_VERSION}-static`;
+const DYNAMIC_CACHE_NAME = `${CACHE_VERSION}-dynamic`;
+const MAPS_CACHE_NAME = `${CACHE_VERSION}-maps`;
+const API_CACHE_NAME = `${CACHE_VERSION}-api`;
+const ROUTES_CACHE_NAME = `${CACHE_VERSION}-routes`;
+
+// App Shell - Critical resources for offline functionality
+const STATIC_RESOURCES = [
   '/',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
+  '/index.html',
   '/manifest.json',
+  '/assets/index.css',
+  '/assets/index.js',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
-  // Add other static assets as needed
+  '/favicon.ico'
 ];
 
-const CACHE_STRATEGIES = {
-  // Cache first, then network for static assets
-  CACHE_FIRST: 'cache-first',
-  // Network first, then cache for dynamic content
-  NETWORK_FIRST: 'network-first',
-  // Network only for real-time data
-  NETWORK_ONLY: 'network-only',
-  // Cache only for offline resources
-  CACHE_ONLY: 'cache-only'
+// Google Maps specific resources
+const MAPS_RESOURCES = [
+  'https://maps.googleapis.com/maps/api/js',
+  'https://fonts.googleapis.com/css',
+  'https://fonts.gstatic.com'
+];
+
+// Maximum cache sizes to prevent storage overflow
+const MAX_CACHE_SIZE = {
+  dynamic: 100,
+  maps: 1000,
+  api: 500,
+  routes: 50
 };
 
-// Install event - cache static assets
-self.addEventListener('install', (event) => {
-  console.log('[SW] Installing Service Worker...');
+// Cache duration for different resource types
+const CACHE_DURATION = {
+  maps: 7 * 24 * 60 * 60 * 1000,      // 7 days
+  api: 24 * 60 * 60 * 1000,           // 24 hours
+  routes: 24 * 60 * 60 * 1000,        // 24 hours
+  dynamic: 60 * 60 * 1000             // 1 hour
+};
+
+/**
+ * Service Worker Installation
+ */
+self.addEventListener('install', event => {
+  console.log('[SW] Installing service worker...');
   
   event.waitUntil(
-    caches.open(STATIC_CACHE_NAME)
-      .then((cache) => {
-        console.log('[SW] Caching static assets...');
-        return cache.addAll(STATIC_ASSETS);
-      })
-      .then(() => {
-        console.log('[SW] Static assets cached successfully');
-        return self.skipWaiting();
-      })
-      .catch((error) => {
-        console.error('[SW] Failed to cache static assets:', error);
-      })
-  );
-});
-
-// Activate event - clean up old caches
-self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating Service Worker...');
-  
-  event.waitUntil(
-    caches.keys()
-      .then((cacheNames) => {
-        return Promise.all(
-          cacheNames.map((cacheName) => {
-            // Delete old caches
-            if (cacheName !== STATIC_CACHE_NAME && 
-                cacheName !== DYNAMIC_CACHE_NAME && 
-                cacheName !== MAP_CACHE_NAME) {
-              console.log('[SW] Deleting old cache:', cacheName);
-              return caches.delete(cacheName);
-            }
-          })
-        );
-      })
-      .then(() => {
-        console.log('[SW] Service Worker activated');
-        return self.clients.claim();
-      })
-  );
-});
-
-// Fetch event - handle network requests
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-  
-  // Handle different types of requests
-  if (isStaticAsset(event.request)) {
-    event.respondWith(handleStaticAsset(event.request));
-  } else if (isApiRequest(event.request)) {
-    event.respondWith(handleApiRequest(event.request));
-  } else if (isMapTileRequest(event.request)) {
-    event.respondWith(handleMapTile(event.request));
-  } else if (isNavigationRequest(event.request)) {
-    event.respondWith(handleNavigation(event.request));
-  } else {
-    event.respondWith(handleDefault(event.request));
-  }
-});
-
-// Handle static assets (cache first)
-async function handleStaticAsset(request) {
-  try {
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    
-    const networkResponse = await fetch(request);
-    const cache = await caches.open(STATIC_CACHE_NAME);
-    cache.put(request, networkResponse.clone());
-    return networkResponse;
-  } catch (error) {
-    console.error('[SW] Static asset fetch failed:', error);
-    return new Response('Offline', { status: 503 });
-  }
-}
-
-// Handle API requests (network first with fallback)
-async function handleApiRequest(request) {
-  try {
-    const networkResponse = await fetch(request);
-    
-    // Cache successful GET requests
-    if (request.method === 'GET' && networkResponse.ok) {
-      const cache = await caches.open(DYNAMIC_CACHE_NAME);
-      cache.put(request, networkResponse.clone());
-    }
-    
-    return networkResponse;
-  } catch (error) {
-    console.log('[SW] Network failed, trying cache for:', request.url);
-    
-    // Try to serve from cache
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    
-    // If it's a critical API request, queue for background sync
-    if (request.method === 'POST' || request.method === 'PUT') {
-      await queueRequestForSync(request);
-    }
-    
-    return new Response(
-      JSON.stringify({ 
-        error: 'Offline',
-        message: 'Request queued for when online'
+    Promise.all([
+      caches.open(STATIC_CACHE_NAME).then(cache => {
+        console.log('[SW] Caching app shell');
+        return cache.addAll(STATIC_RESOURCES);
       }),
-      {
-        status: 503,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
-  }
-}
+      caches.open(MAPS_CACHE_NAME).then(cache => {
+        console.log('[SW] Caching maps resources');
+        return cache.addAll(MAPS_RESOURCES);
+      }),
+      initializeOfflineDB()
+    ]).then(() => {
+      console.log('[SW] Installation complete');
+      self.skipWaiting();
+    })
+  );
+});
 
-// Handle map tiles (cache with TTL)
-async function handleMapTile(request) {
-  const cache = await caches.open(MAP_CACHE_NAME);
-  const cachedResponse = await cache.match(request);
+/**
+ * Service Worker Activation
+ */
+self.addEventListener('activate', event => {
+  console.log('[SW] Activating service worker...');
   
-  // Check if cached tile is still fresh (24 hours)
-  if (cachedResponse) {
-    const cachedDate = new Date(cachedResponse.headers.get('date'));
-    const now = new Date();
-    const age = (now.getTime() - cachedDate.getTime()) / (1000 * 60 * 60);
-    
-    if (age < 24) {
-      return cachedResponse;
-    }
+  event.waitUntil(
+    Promise.all([
+      cleanupOldCaches(),
+      self.clients.claim(),
+      initializeBackgroundSync()
+    ]).then(() => {
+      console.log('[SW] Activation complete');
+    })
+  );
+});
+
+/**
+ * Fetch Event Handler
+ */
+self.addEventListener('fetch', event => {
+  const { request } = event;
+  const { url, method } = request;
+  
+  if (method !== 'GET') {
+    return;
+  }
+  
+  if (isMapTileRequest(url)) {
+    event.respondWith(handleMapTileRequest(request));
+  } else if (isGoogleMapsAPI(url)) {
+    event.respondWith(handleGoogleMapsAPI(request));
+  } else if (isAPIRequest(url)) {
+    event.respondWith(handleAPIRequest(request));
+  } else if (isStaticResource(url)) {
+    event.respondWith(handleStaticResource(request));
+  } else {
+    event.respondWith(handleDynamicResource(request));
+  }
+});
+
+/**
+ * Background Sync
+ */
+self.addEventListener('sync', event => {
+  console.log('[SW] Background sync triggered:', event.tag);
+  
+  switch (event.tag) {
+    case 'sync-routes':
+      event.waitUntil(syncOfflineRoutes());
+      break;
+    case 'sync-places':
+      event.waitUntil(syncOfflinePlaces());
+      break;
+    case 'sync-analytics':
+      event.waitUntil(syncAnalytics());
+      break;
+  }
+});
+
+/**
+ * Push Notifications
+ */
+self.addEventListener('push', event => {
+  const options = {
+    body: 'New navigation update available!',
+    icon: '/icons/icon-192x192.png',
+    badge: '/icons/badge-72x72.png',
+    tag: 'navigation-update',
+    requireInteraction: true,
+    actions: [
+      {
+        action: 'view',
+        title: 'View Update'
+      },
+      {
+        action: 'dismiss',
+        title: 'Dismiss'
+      }
+    ]
+  };
+
+  if (event.data) {
+    const data = event.data.json();
+    options.body = data.body || options.body;
+    options.data = data;
+  }
+
+  event.waitUntil(
+    self.registration.showNotification('Findy Navigation', options)
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  
+  if (event.action === 'view') {
+    event.waitUntil(clients.openWindow('/'));
+  }
+});
+
+/**
+ * Handle Map Tiles
+ */
+async function handleMapTileRequest(request) {
+  const cacheName = MAPS_CACHE_NAME;
+  const cachedResponse = await caches.match(request, { cacheName });
+  
+  if (cachedResponse && !isExpired(cachedResponse, CACHE_DURATION.maps)) {
+    return cachedResponse;
   }
   
   try {
     const networkResponse = await fetch(request);
     if (networkResponse.ok) {
-      cache.put(request, networkResponse.clone());
+      const cache = await caches.open(cacheName);
+      await cache.put(request, networkResponse.clone());
+      await limitCacheSize(cacheName, MAX_CACHE_SIZE.maps);
+      return networkResponse;
     }
-    return networkResponse;
   } catch (error) {
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    return new Response('Map tile unavailable offline', { status: 503 });
+    console.log('[SW] Network failed for map tile');
   }
+  
+  return cachedResponse || createOfflineMapResponse();
 }
 
-// Handle navigation requests
-async function handleNavigation(request) {
+/**
+ * Handle Google Maps API
+ */
+async function handleGoogleMapsAPI(request) {
+  const cacheName = API_CACHE_NAME;
+  
   try {
     const networkResponse = await fetch(request);
-    return networkResponse;
+    if (networkResponse.ok) {
+      const cache = await caches.open(cacheName);
+      await cache.put(request, networkResponse.clone());
+      return networkResponse;
+    }
   } catch (error) {
-    // Serve the main app shell for navigation requests
-    const cache = await caches.open(STATIC_CACHE_NAME);
-    const appShell = await cache.match('/');
-    return appShell || new Response('App unavailable offline', { status: 503 });
+    console.log('[SW] Google Maps API failed');
   }
+  
+  const cachedResponse = await caches.match(request, { cacheName });
+  return cachedResponse || createOfflineAPIResponse(request);
 }
 
-// Handle default requests
-async function handleDefault(request) {
-  try {
-    return await fetch(request);
-  } catch (error) {
-    const cachedResponse = await caches.match(request);
-    return cachedResponse || new Response('Resource unavailable offline', { status: 503 });
-  }
-}
-
-// Background Sync for queued requests
-self.addEventListener('sync', (event) => {
-  console.log('[SW] Background sync triggered:', event.tag);
+/**
+ * Handle API Requests
+ */
+async function handleAPIRequest(request) {
+  const cacheName = API_CACHE_NAME;
   
-  if (event.tag === 'background-sync') {
-    event.waitUntil(processQueuedRequests());
-  }
-});
-
-// Push notifications
-self.addEventListener('push', (event) => {
-  console.log('[SW] Push notification received:', event);
-  
-  let notificationData = {
-    title: 'PathFinder Pro',
-    body: 'You have a new notification',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-96x96.png',
-    tag: 'default',
-    data: {}
-  };
-  
-  if (event.data) {
-    try {
-      const data = event.data.json();
-      notificationData = {
-        ...notificationData,
-        ...data
-      };
-    } catch (e) {
-      console.error('[SW] Error parsing push data:', e);
-      notificationData.body = event.data.text() || notificationData.body;
+  if (await isNetworkSlow()) {
+    const cachedResponse = await caches.match(request, { cacheName });
+    if (cachedResponse && !isExpired(cachedResponse, CACHE_DURATION.api)) {
+      return cachedResponse;
     }
   }
   
-  event.waitUntil(
-    self.registration.showNotification(notificationData.title, {
-      body: notificationData.body,
-      icon: notificationData.icon,
-      badge: notificationData.badge,
-      tag: notificationData.tag,
-      data: notificationData.data,
-      actions: notificationData.actions,
-      requireInteraction: notificationData.requireInteraction || false,
-      silent: notificationData.silent || false
-    })
-  );
-});
-
-// Handle notification clicks
-self.addEventListener('notificationclick', (event) => {
-  console.log('[SW] Notification click received:', event);
-  
-  event.notification.close();
-  
-  const action = event.action;
-  const data = event.notification.data || {};
-  
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList) => {
-        // Handle different notification actions
-        switch (action) {
-          case 'reroute':
-            return handleRerouteAction(clientList, data);
-          case 'accept':
-            return handleAcceptRouteAction(clientList, data);
-          case 'start':
-            return handleStartNavigationAction(clientList, data);
-          case 'rate':
-            return handleRateAction(clientList, data);
-          case 'share':
-            return handleShareAction(clientList, data);
-          case 'dismiss':
-            return Promise.resolve(); // Just dismiss
-          default:
-            // Default action - focus or open app
-            return focusOrOpenApp(clientList);
-        }
-      })
-  );
-});
-
-// Notification action handlers
-function handleRerouteAction(clientList, data) {
-  const client = clientList.find(c => c.url.includes('/navigation') && c.focused) || clientList[0];
-  if (client) {
-    client.focus();
-    client.postMessage({
-      type: 'NAVIGATION_ACTION',
-      action: 'reroute',
-      data
-    });
-  } else {
-    return clients.openWindow('/navigation?action=reroute');
-  }
-}
-
-function handleAcceptRouteAction(clientList, data) {
-  const client = clientList.find(c => c.url.includes('/navigation') && c.focused) || clientList[0];
-  if (client) {
-    client.focus();
-    client.postMessage({
-      type: 'NAVIGATION_ACTION',
-      action: 'accept_route',
-      data
-    });
-  } else {
-    return clients.openWindow('/navigation?action=accept_route');
-  }
-}
-
-function handleStartNavigationAction(clientList, data) {
-  const client = clientList.find(c => c.url.includes('/navigation') && c.focused) || clientList[0];
-  if (client) {
-    client.focus();
-    client.postMessage({
-      type: 'NAVIGATION_ACTION',
-      action: 'start',
-      data
-    });
-  } else {
-    return clients.openWindow('/navigation?action=start');
-  }
-}
-
-function handleRateAction(clientList, data) {
-  const client = clientList.find(c => c.focused) || clientList[0];
-  if (client) {
-    client.focus();
-    client.postMessage({
-      type: 'APP_ACTION',
-      action: 'rate_trip',
-      data
-    });
-  } else {
-    return clients.openWindow('/rate-trip');
-  }
-}
-
-function handleShareAction(clientList, data) {
-  const client = clientList.find(c => c.focused) || clientList[0];
-  if (client) {
-    client.focus();
-    client.postMessage({
-      type: 'APP_ACTION',
-      action: 'share_location',
-      data
-    });
-  } else {
-    return clients.openWindow('/');
-  }
-}
-
-function focusOrOpenApp(clientList) {
-  const client = clientList.find(c => c.focused) || clientList[0];
-  if (client) {
-    return client.focus();
-  } else {
-    return clients.openWindow('/');
-  }
-}
-
-// Utility functions
-function isStaticAsset(request) {
-  return request.url.includes('/static/') || 
-         request.url.includes('/icons/') ||
-         request.url.includes('/manifest.json');
-}
-
-function isApiRequest(request) {
-  return request.url.includes('/api/') ||
-         request.url.includes('openrouteservice.org') ||
-         request.url.includes('/geocode/') ||
-         request.url.includes('/directions/');
-}
-
-function isMapTileRequest(request) {
-  return request.url.includes('tile') ||
-         request.url.includes('maps') ||
-         request.url.match(/\.(png|jpg|jpeg)(\?|$)/) ||
-         request.url.includes('openstreetmap');
-}
-
-function isNavigationRequest(request) {
-  return request.mode === 'navigate' ||
-         (request.method === 'GET' && request.headers.get('accept').includes('text/html'));
-}
-
-// Queue requests for background sync
-async function queueRequestForSync(request) {
   try {
-    const requestData = {
-      url: request.url,
-      method: request.method,
-      headers: Object.fromEntries(request.headers.entries()),
-      body: request.method !== 'GET' ? await request.text() : null,
-      timestamp: Date.now()
-    };
+    const networkResponse = await fetch(request, { timeout: 10000 });
     
-    // Store in IndexedDB for persistence
-    const db = await openDB();
-    const transaction = db.transaction(['sync_queue'], 'readwrite');
-    const store = transaction.objectStore('sync_queue');
-    await store.add(requestData);
-    
-    // Register for background sync
-    await self.registration.sync.register('background-sync');
-    
-    console.log('[SW] Request queued for sync:', request.url);
-  } catch (error) {
-    console.error('[SW] Failed to queue request:', error);
-  }
-}
-
-// Process queued requests during background sync
-async function processQueuedRequests() {
-  try {
-    const db = await openDB();
-    const transaction = db.transaction(['sync_queue'], 'readwrite');
-    const store = transaction.objectStore('sync_queue');
-    const requests = await store.getAll();
-    
-    for (const requestData of requests) {
-      try {
-        const response = await fetch(requestData.url, {
-          method: requestData.method,
-          headers: requestData.headers,
-          body: requestData.body
-        });
-        
-        if (response.ok) {
-          await store.delete(requestData.id);
-          console.log('[SW] Synced queued request:', requestData.url);
-        }
-      } catch (error) {
-        console.error('[SW] Failed to sync request:', error);
-        // Keep in queue for retry
-      }
+    if (networkResponse.ok) {
+      const cache = await caches.open(cacheName);
+      await cache.put(request, networkResponse.clone());
+      await limitCacheSize(cacheName, MAX_CACHE_SIZE.api);
+      return networkResponse;
     }
   } catch (error) {
-    console.error('[SW] Background sync failed:', error);
+    console.log('[SW] API request failed');
+  }
+  
+  const cachedResponse = await caches.match(request, { cacheName });
+  return cachedResponse || createOfflineResponse(request);
+}
+
+/**
+ * Handle Static Resources
+ */
+async function handleStaticResource(request) {
+  const cachedResponse = await caches.match(request, { 
+    cacheName: STATIC_CACHE_NAME 
+  });
+  
+  if (cachedResponse) {
+    return cachedResponse;
+  }
+  
+  try {
+    const networkResponse = await fetch(request);
+    if (networkResponse.ok) {
+      const cache = await caches.open(STATIC_CACHE_NAME);
+      await cache.put(request, networkResponse.clone());
+      return networkResponse;
+    }
+  } catch (error) {
+    console.log('[SW] Static resource failed:', request.url);
+  }
+  
+  if (request.headers.get('accept')?.includes('text/html')) {
+    return caches.match('/index.html');
+  }
+  
+  return new Response('Resource not available offline', { status: 503 });
+}
+
+/**
+ * Handle Dynamic Resources
+ */
+async function handleDynamicResource(request) {
+  const cacheName = DYNAMIC_CACHE_NAME;
+  
+  try {
+    const networkResponse = await fetch(request);
+    if (networkResponse.ok) {
+      const cache = await caches.open(cacheName);
+      await cache.put(request, networkResponse.clone());
+      await limitCacheSize(cacheName, MAX_CACHE_SIZE.dynamic);
+      return networkResponse;
+    }
+  } catch (error) {
+    console.log('[SW] Dynamic resource failed');
+  }
+  
+  const cachedResponse = await caches.match(request, { cacheName });
+  return cachedResponse || new Response('Content not available offline', { 
+    status: 503,
+    headers: { 'Content-Type': 'text/plain' }
+  });
+}
+
+/**
+ * Utility Functions
+ */
+function isMapTileRequest(url) {
+  return url.includes('maps.googleapis.com/maps/vt') || 
+         url.includes('khms') || 
+         url.includes('tiles.googleapis.com');
+}
+
+function isGoogleMapsAPI(url) {
+  return url.includes('maps.googleapis.com/maps/api') ||
+         url.includes('places.googleapis.com') ||
+         url.includes('directions.googleapis.com');
+}
+
+function isAPIRequest(url) {
+  return url.includes('/api/') || url.includes('localhost:8000');
+}
+
+function isStaticResource(url) {
+  return STATIC_RESOURCES.some(resource => url.endsWith(resource)) ||
+         url.includes('/static/') ||
+         url.includes('/assets/') ||
+         url.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2)$/);
+}
+
+async function isNetworkSlow() {
+  if ('connection' in navigator) {
+    const connection = navigator.connection;
+    return connection.effectiveType === 'slow-2g' || 
+           connection.effectiveType === '2g' ||
+           connection.downlink < 1.5;
+  }
+  return false;
+}
+
+function isExpired(response, maxAge) {
+  if (!response.headers.has('date')) return false;
+  
+  const responseDate = new Date(response.headers.get('date'));
+  const now = new Date();
+  return (now.getTime() - responseDate.getTime()) > maxAge;
+}
+
+async function limitCacheSize(cacheName, maxSize) {
+  const cache = await caches.open(cacheName);
+  const requests = await cache.keys();
+  
+  if (requests.length > maxSize) {
+    const toDelete = requests.slice(0, requests.length - maxSize);
+    await Promise.all(toDelete.map(request => cache.delete(request)));
   }
 }
 
-// IndexedDB helper
-function openDB() {
+async function cleanupOldCaches() {
+  const cacheNames = await caches.keys();
+  const oldCaches = cacheNames.filter(name => 
+    name.startsWith('findy-') && !name.includes(CACHE_VERSION)
+  );
+  
+  return Promise.all(oldCaches.map(name => caches.delete(name)));
+}
+
+function createOfflineMapResponse() {
+  // Create a simple offline tile
+  const svg = `<svg width="256" height="256" xmlns="http://www.w3.org/2000/svg">
+    <rect width="256" height="256" fill="#f0f0f0"/>
+    <text x="128" y="128" text-anchor="middle" font-family="Arial" font-size="16" fill="#999">Offline</text>
+  </svg>`;
+  
+  return new Response(svg, { 
+    headers: { 'Content-Type': 'image/svg+xml' }
+  });
+}
+
+function createOfflineAPIResponse(request) {
+  const url = new URL(request.url);
+  
+  if (url.pathname.includes('directions')) {
+    return new Response(JSON.stringify({
+      status: 'OFFLINE',
+      routes: [],
+      error_message: 'Offline mode - no routes available'
+    }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+  
+  return new Response(JSON.stringify({
+    status: 'offline',
+    message: 'This feature is not available offline'
+  }), {
+    status: 503,
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+
+function createOfflineResponse(request) {
+  return new Response(JSON.stringify({
+    offline: true,
+    message: 'You are currently offline. Some features may be limited.',
+    timestamp: new Date().toISOString()
+  }), {
+    status: 503,
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+
+async function initializeOfflineDB() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open('PathFinderSW', 1);
+    const request = indexedDB.open('FindyOfflineDB', 2);
     
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
     
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
-      if (!db.objectStoreNames.contains('sync_queue')) {
-        const store = db.createObjectStore('sync_queue', { keyPath: 'id', autoIncrement: true });
-        store.createIndex('timestamp', 'timestamp', { unique: false });
+      
+      if (!db.objectStoreNames.contains('maps')) {
+        const mapsStore = db.createObjectStore('maps', { keyPath: 'id' });
+        mapsStore.createIndex('city', 'city', { unique: false });
+        mapsStore.createIndex('bounds', 'bounds', { unique: false });
+      }
+      
+      if (!db.objectStoreNames.contains('routes')) {
+        const routesStore = db.createObjectStore('routes', { keyPath: 'id' });
+        routesStore.createIndex('fromTo', 'fromTo', { unique: false });
+      }
+      
+      if (!db.objectStoreNames.contains('places')) {
+        const placesStore = db.createObjectStore('places', { keyPath: 'id' });
+        placesStore.createIndex('category', 'category', { unique: false });
+      }
+      
+      if (!db.objectStoreNames.contains('settings')) {
+        db.createObjectStore('settings', { keyPath: 'key' });
       }
     };
   });
 }
 
-// Cache management - cleanup old entries
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  } else if (event.data && event.data.type === 'CACHE_CLEANUP') {
-    event.waitUntil(cleanupCaches());
+async function initializeBackgroundSync() {
+  if ('sync' in self.registration) {
+    console.log('[SW] Background sync available');
   }
-});
-
-async function cleanupCaches() {
-  const cacheNames = await caches.keys();
-  
-  for (const cacheName of cacheNames) {
-    const cache = await caches.open(cacheName);
-    const requests = await cache.keys();
-    
-    // Remove entries older than 7 days
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    
-    for (const request of requests) {
-      const response = await cache.match(request);
-      if (response) {
-        const responseDate = new Date(response.headers.get('date'));
-        if (responseDate < oneWeekAgo) {
-          await cache.delete(request);
-        }
-      }
-    }
-  }
-  
-  console.log('[SW] Cache cleanup completed');
 }
+
+async function syncOfflineRoutes() {
+  console.log('[SW] Syncing offline routes...');
+}
+
+async function syncOfflinePlaces() {
+  console.log('[SW] Syncing offline places...');
+}
+
+async function syncAnalytics() {
+  console.log('[SW] Syncing analytics data...');
+}
+
+console.log('[SW] Service worker script loaded');

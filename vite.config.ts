@@ -58,6 +58,7 @@
       open: true,
       strictPort: true,
       host: true,
+      // https: true, // Disabled for development to avoid SSL issues
       hmr: {
         port: 3001,
         overlay: true,

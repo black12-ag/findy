@@ -1,19 +1,194 @@
-import React, { useState, useEffect } from 'react';
-import { Search, MapPin, Clock, Star, Navigation, ArrowLeft, Mic, QrCode, Camera, Filter, Accessibility } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, MapPin, Clock, Star, Navigation, ArrowLeft, Mic, X, Loader, Accessibility } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from './ui/sheet';
-import { Switch } from './ui/switch';
-import { Slider } from './ui/slider';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { ORSGeocodingService, setORSApiKey } from '../services/googleUnifiedService';
-import placesService from '../services/places';
 import { logger } from '../utils/logger';
-import { searchQuerySchema, validateForm } from '../utils/validation';
-import { toast } from 'sonner';
-import { useLoadingState } from '../contexts/LoadingContext';
+import { toast } from '../utils/toastConfig';
+import { ToastCategory } from '../utils/toastConfig';
+
+// Google Places Service Interface
+class GooglePlacesSearchService {
+  private isGoogleLoaded(): boolean {
+    return typeof google !== 'undefined' && !!google.maps && !!google.maps.places;
+  }
+
+  private async ensureGoogleLoaded(): Promise<boolean> {
+    if (this.isGoogleLoaded()) return true;
+
+    // Wait a bit for Google to load if it's still loading
+    for (let i = 0; i < 10; i++) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      if (this.isGoogleLoaded()) return true;
+    }
+
+    return false;
+  }
+
+  async searchPlaces(query: string): Promise<Location[]> {
+    if (!query.trim()) return [];
+
+    const isReady = await this.ensureGoogleLoaded();
+    if (!isReady) {
+      throw new Error('Google Maps not loaded');
+    }
+
+    return new Promise((resolve, reject) => {
+      const service = new google.maps.places.PlacesService(document.createElement('div'));
+      
+      const request = {
+        query: query.trim(),
+        fields: ['place_id', 'name', 'formatted_address', 'geometry', 'rating', 'user_ratings_total', 'price_level', 'opening_hours']
+      };
+
+      service.textSearch(request, (results, status) => {
+        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+          const places: Location[] = results.slice(0, 10).map((place, index) => {
+            const geometry = place.geometry;
+            if (!geometry || !geometry.location) {
+              return null;
+            }
+
+            return {
+              id: place.place_id || `search-${Date.now()}-${index}`,
+              name: place.name || 'Unknown Place',
+              address: place.formatted_address || 'Address not available',
+              lat: geometry.location.lat(),
+              lng: geometry.location.lng(),
+              category: 'search_result',
+              rating: place.rating,
+              userRatingsTotal: place.user_ratings_total,
+              priceLevel: place.price_level,
+              isOpenNow: place.opening_hours?.isOpen?.() ?? undefined
+            };
+          }).filter(Boolean) as Location[];
+
+          resolve(places);
+        } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+          resolve([]);
+        } else {
+          reject(new Error(`Places search failed: ${status}`));
+        }
+      });
+    });
+  }
+
+  async getAutocompleteSuggestions(query: string): Promise<{id: string, description: string, place_id?: string}[]> {
+    if (!query.trim()) return [];
+
+    const isReady = await this.ensureGoogleLoaded();
+    if (!isReady) return [];
+
+    return new Promise((resolve) => {
+      const service = new google.maps.places.AutocompleteService();
+      
+      service.getPlacePredictions(
+        {
+          input: query.trim(),
+          types: ['establishment', 'geocode'],
+          componentRestrictions: { country: [] } // Global search
+        },
+        (predictions, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
+            const suggestions = predictions.slice(0, 8).map((prediction, index) => ({
+              id: prediction.place_id || `suggestion-${index}`,
+              description: prediction.description,
+              place_id: prediction.place_id
+            }));
+            resolve(suggestions);
+          } else {
+            resolve([]);
+          }
+        }
+      );
+    });
+  }
+
+  async getPlaceDetails(placeId: string): Promise<Location | null> {
+    const isReady = await this.ensureGoogleLoaded();
+    if (!isReady) return null;
+
+    return new Promise((resolve, reject) => {
+      const service = new google.maps.places.PlacesService(document.createElement('div'));
+      
+      service.getDetails(
+        {
+          placeId: placeId,
+          fields: ['place_id', 'name', 'formatted_address', 'geometry', 'rating', 'user_ratings_total', 'price_level', 'opening_hours']
+        },
+        (place, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && place) {
+            const geometry = place.geometry;
+            if (!geometry || !geometry.location) {
+              resolve(null);
+              return;
+            }
+
+            resolve({
+              id: place.place_id || placeId,
+              name: place.name || 'Unknown Place',
+              address: place.formatted_address || 'Address not available',
+              lat: geometry.location.lat(),
+              lng: geometry.location.lng(),
+              category: 'place_details',
+              rating: place.rating,
+              userRatingsTotal: place.user_ratings_total,
+              priceLevel: place.price_level,
+              isOpenNow: place.opening_hours?.isOpen?.() ?? undefined
+            });
+          } else {
+            resolve(null);
+          }
+        }
+      );
+    });
+  }
+
+  async searchNearbyPlaces(location: {lat: number, lng: number}, type: string, radius = 5000): Promise<Location[]> {
+    const isReady = await this.ensureGoogleLoaded();
+    if (!isReady) return [];
+
+    return new Promise((resolve, reject) => {
+      const service = new google.maps.places.PlacesService(document.createElement('div'));
+      
+      const request = {
+        location: new google.maps.LatLng(location.lat, location.lng),
+        radius,
+        type: type as any
+      };
+
+      service.nearbySearch(request, (results, status) => {
+        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+          const places: Location[] = results.slice(0, 15).map((place, index) => {
+            const geometry = place.geometry;
+            if (!geometry || !geometry.location) {
+              return null;
+            }
+
+            return {
+              id: place.place_id || `nearby-${type}-${index}`,
+              name: place.name || 'Unknown Place',
+              address: place.vicinity || place.formatted_address || 'Address not available',
+              lat: geometry.location.lat(),
+              lng: geometry.location.lng(),
+              category: type,
+              rating: place.rating,
+              userRatingsTotal: place.user_ratings_total,
+              priceLevel: place.price_level,
+              isOpenNow: place.opening_hours?.open_now
+            };
+          }).filter(Boolean) as Location[];
+
+          resolve(places);
+        } else {
+          resolve([]);
+        }
+      });
+    });
+  }
+}
+
+const googlePlacesService = new GooglePlacesSearchService();
 
 // Helper function to get current location
 const getCurrentLocation = (): Promise<{ lat: number; lng: number } | null> => {
@@ -43,6 +218,11 @@ interface Location {
   lat: number;
   lng: number;
   category?: string;
+  rating?: number;
+  userRatingsTotal?: number;
+  priceLevel?: number;
+  isOpenNow?: boolean;
+  distance?: string;
 }
 
 interface SearchPanelProps {
@@ -56,35 +236,19 @@ interface SearchPanelProps {
 
 export function SearchPanel({ query, onSearch, onLocationSelect, transportMode, onBack, onOpenVoicePanel }: SearchPanelProps) {
   const [searchInput, setSearchInput] = useState(query);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const { isLoading, startLoading, stopLoading } = useLoadingState('search');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<Location[]>([]);
+  const [suggestions, setSuggestions] = useState<{id: string, description: string, place_id?: string}[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [recentSearches, setRecentSearches] = useState<Location[]>([]);
-  const [filters, setFilters] = useState({
-    openNow: false,
-    rating: 0,
-    priceRange: [1, 4],
-    distance: 10,
-    accessibility: false
-  });
+  const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  // Initialize ORS API key
+  // Initialize component
   useEffect(() => {
-    const apiKey = import.meta.env.VITE_ORS_API_KEY || localStorage.getItem('ors_api_key');
-    if (apiKey) {
-      setORSApiKey(apiKey);
-      logger.debug('ORS API key configured');
-    } else {
-      // In development mode, show a helpful message
-      if (process.env.NODE_ENV === 'development') {
-        logger.info('ORS API key not configured - using fallback data for development');
-        // Set a placeholder key to prevent initialization errors
-        setORSApiKey('development-fallback-key');
-      }
-    }
     loadRecentSearches();
+    getCurrentLocation().then(setCurrentLocation);
   }, []);
 
   // Load recent searches from localStorage
@@ -121,99 +285,112 @@ export function SearchPanel({ query, onSearch, onLocationSelect, transportMode, 
     return `${distance.toFixed(1)}km`;
   };
 
-  // Parse opening hours from OSM format
-  const parseOpeningHours = (openingHours: string | undefined): boolean | undefined => {
-    if (!openingHours) return undefined;
-    
-    // Simple parsing for common formats
-    const now = new Date();
-    const currentHour = now.getHours();
-    
-    // Handle 24/7
-    if (openingHours.includes('24/7')) return true;
-    
-    // Handle basic hour ranges (e.g., "09:00-17:00")
-    const hourMatch = openingHours.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/);
-    if (hourMatch) {
-      const openHour = parseInt(hourMatch[1]);
-      const closeHour = parseInt(hourMatch[3]);
-      return currentHour >= openHour && currentHour < closeHour;
-    }
-    
-    // Default to undefined if can't parse
-    return undefined;
-  };
-
-  // Search function using ORS API only
+  // Modern Google Places search function
   const performSearch = async (searchQuery: string) => {
     if (!searchQuery.trim()) {
-      setSearchError('Search query cannot be empty');
       setSearchResults([]);
       return;
     }
 
-    // Validate search query
-    const validationResult = validateForm({ query: searchQuery }, searchQuerySchema);
-    if (!validationResult.isValid) {
-      const errorMessage = Object.values(validationResult.errors)[0];
-      setSearchError(errorMessage);
-      toast.error(errorMessage);
-      return;
-    }
-
-    setSearchError(null);
-
-    startLoading();
+    setIsSearching(true);
+    setShowSuggestions(false);
     
-    // Check if ORS API key is available
-    const hasAPIKey = import.meta.env?.VITE_ORS_API_KEY || localStorage.getItem('ors_api_key');
-    if (!hasAPIKey) {
-      logger.warn('Missing ORS API key - search results unavailable');
-      setSearchResults([]);
-      stopLoading();
-      return;
-    }
-    
-    if (hasAPIKey) {
-      // Try ORS API first
-      try {
-        const results = await ORSGeocodingService.search(searchQuery, {
-          limit: 20,
-          countryCode: 'US'
-        });
-
-        const formattedResults = results.map(result => ({
-          id: result.place_id,
-          name: result.display_name.split(',')[0],
-          address: result.display_name,
-          lat: result.lat,
-          lng: result.lon,
-          category: result.class,
-          // Remove mock data - these should come from real APIs or be optional
-          rating: undefined,
-          distance: undefined,
-          priceLevel: undefined,
-          openNow: undefined,
-          accessible: undefined
-        }));
-
-        setSearchResults(formattedResults);
-        stopLoading();
-        return;
-      } catch (error) {
-        logger.info('Google geocoding completed, using unified Google service', { query: searchQuery });
-        // Continue with Google Places API results
+    try {
+      logger.info('Searching places with Google Places API:', { query: searchQuery });
+      const places = await googlePlacesService.searchPlaces(searchQuery);
+      
+      // Add distance if current location is available
+      const placesWithDistance = places.map(place => ({
+        ...place,
+        distance: currentLocation ? calculateDistance(currentLocation, { lat: place.lat, lng: place.lng }) : undefined
+      }));
+      
+      setSearchResults(placesWithDistance);
+      
+      if (places.length === 0) {
+        toast.searchResult(`No results found for "${searchQuery}"`, 'info');
+      } else {
+        logger.info('Search successful:', { query: searchQuery, count: places.length });
       }
+      
+    } catch (error) {
+      logger.error('Search failed:', error);
+      const errorMessage = error.message || 'Search failed';
+      
+      if (errorMessage.includes('Google Maps') || errorMessage.includes('not loaded')) {
+        toast.error('Google Maps is still loading. Please try again.', ToastCategory.SEARCH);
+      } else {
+        toast.error('Search failed. Please try again.', ToastCategory.SEARCH);
+      }
+      
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
     }
   };
 
-  // Handle search input changes with debouncing
+  // Get autocomplete suggestions
+  const getSuggestions = async (query: string) => {
+    if (!query.trim()) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    try {
+      const suggestions = await googlePlacesService.getAutocompleteSuggestions(query);
+      setSuggestions(suggestions);
+      setShowSuggestions(suggestions.length > 0);
+    } catch (error) {
+      logger.warn('Suggestions failed:', error);
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  // Handle suggestion selection
+  const handleSuggestionSelect = async (suggestion: {id: string, description: string, place_id?: string}) => {
+    if (!suggestion.place_id) {
+      // Fallback to text search
+      setSearchInput(suggestion.description);
+      performSearch(suggestion.description);
+      return;
+    }
+
+    setIsSearching(true);
+    setShowSuggestions(false);
+    
+    try {
+      const place = await googlePlacesService.getPlaceDetails(suggestion.place_id);
+      if (place) {
+        setSearchInput(place.name);
+        
+        // Add distance if current location is available
+        const placeWithDistance = {
+          ...place,
+          distance: currentLocation ? calculateDistance(currentLocation, { lat: place.lat, lng: place.lng }) : undefined
+        };
+        
+        setSearchResults([placeWithDistance]);
+      }
+    } catch (error) {
+      logger.error('Failed to get place details:', error);
+      toast.error('Failed to get place details', ToastCategory.SEARCH);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Handle input changes with suggestions
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (searchInput.trim()) {
-        performSearch(searchInput);
+      if (searchInput.trim() && searchInput.length > 2) {
+        getSuggestions(searchInput);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
       }
-    }, 500);
+    }, 300); // Faster suggestions
 
     return () => clearTimeout(timeoutId);
   }, [searchInput]);
@@ -221,102 +398,101 @@ export function SearchPanel({ query, onSearch, onLocationSelect, transportMode, 
   // Handle search submission
   const handleSearchSubmit = () => {
     if (!searchInput.trim()) {
-      setSearchError('Search query cannot be empty');
-      toast.error('Please enter a search query');
+      toast.error('Please enter a search query', ToastCategory.SEARCH);
       return;
     }
 
-    // Validate search query
-    const validationResult = validateForm({ query: searchInput }, searchQuerySchema);
-    if (!validationResult.isValid) {
-      const errorMessage = Object.values(validationResult.errors)[0];
-      setSearchError(errorMessage);
-      toast.error(errorMessage);
-      return;
-    }
-
-    setSearchError(null);
     performSearch(searchInput);
     onSearch(searchInput);
   };
 
-  // Handle category button clicks using enhanced places service
+  // Handle category button clicks using Google Places nearby search
   const handleCategoryClick = async (categoryId: string) => {
-    startLoading();
+    if (!currentLocation) {
+      toast.error('Location not available for nearby search', ToastCategory.SEARCH);
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchInput(''); // Clear search input
+    setShowSuggestions(false);
     
     try {
-      // Get current location or use default
-      const currentLocation = await getCurrentLocation() || { lat: 37.7749, lng: -122.4194 };
-      
-      // Use enhanced places service (Google Maps with ORS fallback)
-      const places = await placesService.searchPlacesEnhanced(
-        currentLocation,
-        undefined, // no query, just category
-        categoryId,
-        5000 // 5km radius
-      );
+      logger.info('Searching nearby places:', { category: categoryId, location: currentLocation });
+      const places = await googlePlacesService.searchNearbyPlaces(currentLocation, categoryId, 5000);
 
-      // Format places from the enhanced places service
-      const formattedPOIs = places.map(place => ({
-        id: place.id || place.place_id || `${categoryId}_${Date.now()}`,
-        name: place.name || `${categoryId} location`,
-        address: place.address || place.formatted_address || 'Address not available',
-        lat: place.location?.lat || place.lat,
-        lng: place.location?.lng || place.lng,
-        category: categoryId,
-        rating: place.rating,
-        distance: place.location ? calculateDistance(currentLocation, place.location) : undefined,
-        priceLevel: place.price_level,
-        openNow: place.opening_hours?.open_now,
-        accessible: place.wheelchair_accessible_entrance
+      // Add distance to all places
+      const placesWithDistance = places.map(place => ({
+        ...place,
+        distance: calculateDistance(currentLocation, { lat: place.lat, lng: place.lng })
       }));
 
-      setSearchResults(formattedPOIs);
+      setSearchResults(placesWithDistance);
+      
+      if (places.length === 0) {
+        toast.searchResult(`No ${categoryId.replace('_', ' ')} found nearby`, 'info');
+      } else {
+        logger.info('Nearby search successful:', { category: categoryId, count: places.length });
+      }
+      
     } catch (error) {
-      logger.warn('ORS POI search failed', { error, category: categoryId });
+      logger.error('Nearby search failed:', error);
+      toast.error('Failed to find nearby places', ToastCategory.SEARCH);
       setSearchResults([]);
     } finally {
-      stopLoading();
+      setIsSearching(false);
     }
   };
 
+  // Handle clicks outside suggestions
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const categories = [
-    { id: 'restaurants', name: 'Restaurants', icon: '🍽️' },
-    { id: 'gas_stations', name: 'Gas Stations', icon: '⛽' },
-    { id: 'parking', name: 'Parking', icon: '🅿️' },
-    { id: 'banks', name: 'ATMs', icon: '💵' },
-    { id: 'hospitals', name: 'Hospitals', icon: '🏥' },
-    { id: 'shopping', name: 'Shopping', icon: '🛍️' },
-    { id: 'hotels', name: 'Hotels', icon: '🏨' },
-    { id: 'entertainment', name: 'Entertainment', icon: '🎭' },
+    { id: 'restaurant', name: 'Restaurants', icon: '🍽️' },
+    { id: 'gas_station', name: 'Gas Stations', icon: '⛽' },
+    { id: 'parking', name: 'Parking', icon: '🉿️' },
+    { id: 'atm', name: 'ATMs', icon: '💵' },
+    { id: 'hospital', name: 'Hospitals', icon: '🏥' },
+    { id: 'shopping_mall', name: 'Shopping', icon: '🛍️' },
+    { id: 'lodging', name: 'Hotels', icon: '🏨' },
+    { id: 'movie_theater', name: 'Entertainment', icon: '🎭' },
   ];
 
   const getCategoryIcon = (category: string) => {
     const categoryMap: Record<string, string> = {
-      restaurants: '🍽️',
-      gas_stations: '⛽',
-      parking: '🅿️',
-      banks: '💵',
-      hospitals: '🏥',
-      shopping: '🛍️',
-      hotels: '🏨',
-      entertainment: '🎭',
+      restaurant: '🍽️',
+      gas_station: '⛽',
+      parking: '🉿️',
+      atm: '💵',
+      hospital: '🏥',
+      shopping_mall: '🛍️',
+      lodging: '🏨',
+      movie_theater: '🎭',
+      search_result: '📍',
+      place_details: '📍'
     };
     return categoryMap[category] || '📍';
   };
 
-  const handleLocationSelect = (location: any) => {
-    const formattedLocation: Location = {
-      id: location.id,
-      name: location.name,
-      address: location.address,
-      lat: location.lat,
-      lng: location.lng,
-      category: location.category
-    };
+  const handleLocationSelect = (location: Location) => {
+    saveToRecentSearches(location);
+    onLocationSelect(location);
     
-    saveToRecentSearches(formattedLocation);
-    onLocationSelect(formattedLocation);
+    // Show minimal route calculation message
+    const modeEmoji = transportMode === 'walking' ? '🚶' : transportMode === 'driving' ? '🚗' : transportMode === 'cycling' ? '🚴' : '🚌';
+    toast.searchResult(`${modeEmoji} Route to ${location.name}`, 'success');
+    
+    // Go back to map to show the route
+    onBack();
   };
 
   return (
@@ -336,24 +512,60 @@ export function SearchPanel({ query, onSearch, onLocationSelect, transportMode, 
         {/* Search Input */}
         <div className="relative">
           <Input
+            ref={inputRef}
             value={searchInput}
             onChange={(e) => {
               setSearchInput(e.target.value);
-              if (searchError) setSearchError(null); // Clear error on typing
             }}
             placeholder="Search for places, addresses..."
-            className={`pl-10 pr-20 ${searchError ? 'border-red-300 focus:border-red-500' : ''}`}
+            className="pl-10 pr-20"
             onKeyPress={(e) => e.key === 'Enter' && handleSearchSubmit()}
+            onFocus={() => {
+              if (suggestions.length > 0) {
+                setShowSuggestions(true);
+              }
+            }}
             autoFocus
           />
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex gap-1">
+            {searchInput && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="w-8 h-8" 
+                onClick={() => {
+                  setSearchInput('');
+                  setSuggestions([]);
+                  setShowSuggestions(false);
+                  setSearchResults([]);
+                }}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            )}
             <Button variant="ghost" size="icon" className="w-8 h-8" onClick={onOpenVoicePanel}>
               <Mic className="w-4 h-4" />
             </Button>
           </div>
-          {searchError && (
-            <p className="text-red-600 text-sm mt-1">{searchError}</p>
+          
+          {/* Autocomplete Suggestions */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div 
+              ref={suggestionsRef}
+              className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto mt-1"
+            >
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion.id}
+                  className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 flex items-center gap-3"
+                  onClick={() => handleSuggestionSelect(suggestion)}
+                >
+                  <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <span className="text-sm text-gray-900 truncate">{suggestion.description}</span>
+                </button>
+              ))}
+            </div>
           )}
         </div>
       </div>

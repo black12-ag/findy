@@ -88,6 +88,20 @@ class Logger {
   exportLogs(): string {
     return JSON.stringify(this.logs, null, 2);
   }
+
+  // Group methods for console grouping (development only)
+  group(label: string) {
+    this.addLog('debug', `=== ${label} ===`);
+    if (this.isDevelopment) {
+      console.group(label);
+    }
+  }
+
+  groupEnd() {
+    if (this.isDevelopment) {
+      console.groupEnd();
+    }
+  }
 }
 
 // Export singleton instance

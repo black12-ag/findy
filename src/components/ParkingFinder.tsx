@@ -1,9 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   ArrowLeft,
-  Car,
   Clock,
-  DollarSign,
   MapPin,
   Navigation,
   Star,
@@ -11,9 +9,6 @@ import {
   CreditCard,
   Timer,
   Info,
-  CheckCircle,
-  AlertCircle,
-  TrendingUp,
   Search
 } from 'lucide-react';
 import { Card } from './ui/card';
@@ -21,7 +16,6 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import { Progress } from './ui/progress';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { Alert, AlertDescription } from './ui/alert';
 import { logger } from '../utils/logger';
 import { toast } from 'sonner';
@@ -69,7 +63,14 @@ export function ParkingFinder({ onBack, destination, map, onNavigateToParking, o
   // Initialize map service
   useEffect(() => {
     if (map && window.google) {
-      aiPredictionsService.initialize(map);
+      try {
+        aiPredictionsService.initialize(map);
+        logger.info('AI Predictions Service initialized for parking finder');
+      } catch (error) {
+        logger.error('Failed to initialize AI Predictions Service', error);
+      }
+    } else {
+      logger.warn('Map or Google Maps not available for AI Predictions Service initialization');
     }
   }, [map]);
 
@@ -113,7 +114,13 @@ export function ParkingFinder({ onBack, destination, map, onNavigateToParking, o
 
       // Use Google Maps Places API to find parking
       logger.info('Attempting to find parking spots via Google Places API', { searchLocation });
-      const parkingPrediction = await aiPredictionsService.predictParking(searchLocation);
+      const searchLocationWithId = {
+        id: `search_${Date.now()}`,
+        name: searchQuery || 'Search Location',
+        address: searchQuery || 'Unknown Address',
+        ...searchLocation
+      };
+      const parkingPrediction = await aiPredictionsService.predictParking(searchLocationWithId);
       
       logger.info('Parking prediction result:', { 
         spotsFound: parkingPrediction.nearbySpots.length,
@@ -208,7 +215,8 @@ export function ParkingFinder({ onBack, destination, map, onNavigateToParking, o
         }
       }
     } catch (error) {
-      logger.error('Failed to search parking spots', { error: error.message });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to search parking spots', { error: errorMessage });
       toast.error('Google Places API error. Showing sample data.');
       const mockSpots = getMockParkingSpots();
       setParkingSpots(mockSpots);
@@ -310,6 +318,7 @@ export function ParkingFinder({ onBack, destination, map, onNavigateToParking, o
     if (spot.location) {
       // Set the parking spot as destination
       setSelectedLocation({
+        id: spot.id,
         lat: spot.location.lat,
         lng: spot.location.lng,
         name: spot.name,
@@ -318,7 +327,14 @@ export function ParkingFinder({ onBack, destination, map, onNavigateToParking, o
       
       // Trigger route calculation
       if (currentLocation) {
-        calculateRoute(currentLocation, {
+        const currentLocationWithId = {
+          id: 'current_location',
+          name: 'Current Location',
+          address: 'Your current location',
+          ...currentLocation
+        };
+        calculateRoute(currentLocationWithId, {
+          id: spot.id,
           lat: spot.location.lat,
           lng: spot.location.lng,
           name: spot.name,

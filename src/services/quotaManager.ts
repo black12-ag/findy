@@ -2,13 +2,13 @@
  * 📊 API Quota Management System
  * 
  * Tracks API usage, enforces limits, and manages fallback strategies
- * for OpenRouteService APIs with your specific quotas
+ * for Google Maps APIs with your specific quotas
  */
 
-import { API_ENDPOINTS, APIEndpointType } from '../config/apiConfig';
+import { API_SERVICES, APIServiceType } from '../config/apiConfig';
 
 export interface QuotaStatus {
-  endpoint: APIEndpointType;
+  endpoint: APIServiceType;
   dailyLimit: number;
   dailyUsed: number;
   dailyRemaining: number;
@@ -22,16 +22,16 @@ export interface QuotaStatus {
 
 export interface QuotaUsage {
   timestamp: number;
-  endpoint: APIEndpointType;
+  endpoint: APIServiceType;
   successful: boolean;
   cached: boolean;
   fallback: boolean;
 }
 
 class QuotaManager {
-  private usage: Map<APIEndpointType, QuotaUsage[]> = new Map();
-  private quotaStatus: Map<APIEndpointType, QuotaStatus> = new Map();
-  private resetIntervals: Map<APIEndpointType, NodeJS.Timeout> = new Map();
+  private usage: Map<APIServiceType, QuotaUsage[]> = new Map();
+  private quotaStatus: Map<APIServiceType, QuotaStatus> = new Map();
+  private resetIntervals: Map<APIServiceType, NodeJS.Timeout> = new Map();
 
   constructor() {
     this.initializeQuotas();
@@ -42,8 +42,8 @@ class QuotaManager {
    * Initialize quota tracking for all endpoints
    */
   private initializeQuotas(): void {
-    Object.entries(API_ENDPOINTS).forEach(([key, config]) => {
-      const endpoint = key as APIEndpointType;
+    Object.entries(API_SERVICES).forEach(([key, config]) => {
+      const endpoint = key as APIServiceType;
       
       this.usage.set(endpoint, []);
       this.quotaStatus.set(endpoint, {
@@ -67,7 +67,7 @@ class QuotaManager {
   /**
    * Check if API call is allowed based on current quotas
    */
-  public canMakeRequest(endpoint: APIEndpointType): {
+  public canMakeRequest(endpoint: APIServiceType): {
     allowed: boolean;
     reason?: string;
     fallbackAvailable: boolean;
@@ -107,7 +107,7 @@ class QuotaManager {
    * Record API usage
    */
   public recordUsage(
-    endpoint: APIEndpointType, 
+    endpoint: APIServiceType, 
     successful: boolean = true, 
     cached: boolean = false,
     fallback: boolean = false
@@ -141,7 +141,7 @@ class QuotaManager {
   /**
    * Get current quota status for an endpoint
    */
-  public getQuotaStatus(endpoint: APIEndpointType): QuotaStatus {
+  public getQuotaStatus(endpoint: APIServiceType): QuotaStatus {
     const status = this.quotaStatus.get(endpoint);
     if (!status) {
       throw new Error(`Quota status not found for endpoint: ${endpoint}`);
@@ -164,11 +164,11 @@ class QuotaManager {
   /**
    * Get usage statistics for all endpoints
    */
-  public getAllQuotaStatus(): Record<APIEndpointType, QuotaStatus> {
-    const result = {} as Record<APIEndpointType, QuotaStatus>;
+  public getAllQuotaStatus(): Record<APIServiceType, QuotaStatus> {
+    const result = {} as Record<APIServiceType, QuotaStatus>;
     
-    Object.keys(API_ENDPOINTS).forEach(key => {
-      const endpoint = key as APIEndpointType;
+    Object.keys(API_SERVICES).forEach(key => {
+      const endpoint = key as APIServiceType;
       result[endpoint] = this.getQuotaStatus(endpoint);
     });
 
@@ -178,7 +178,7 @@ class QuotaManager {
   /**
    * Get usage in the last minute
    */
-  private getMinuteUsage(endpoint: APIEndpointType): number {
+  private getMinuteUsage(endpoint: APIServiceType): number {
     const now = Date.now();
     const oneMinuteAgo = now - (60 * 1000);
     

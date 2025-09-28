@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 import { Progress } from './ui/progress';
 import { Badge } from './ui/badge';
 import { useGeolocation, GeolocationPosition } from '../services/geolocationService';
-import { directionsService } from '../services/directionsService';
+import directionsService from '../services/directionsService';
 import { logger } from '../utils/logger';
 import { toast } from 'sonner';
 
@@ -139,7 +139,7 @@ export function NavigationPanel({ route, onStopNavigation, onStartAR, onShareETA
     
     try {
       // Check if we need a new route due to deviation or traffic
-      const newRoute = await directionsService.getRouteWithORS(
+      const newRoute = await directionsService.getRoute(
         { lat: currentPosition.lat, lng: currentPosition.lng },
         { lat: route.to.lat, lng: route.to.lng },
         route.mode as any

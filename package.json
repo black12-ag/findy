@@ -37,6 +37,7 @@
             "clsx": "*",
             "cmdk": "^1.1.1",
             "embla-carousel-react": "^8.6.0",
+            "idb": "^8.0.3",
             "input-otp": "^1.4.2",
             "lucide-react": "^0.487.0",
             "maplibre-gl": "^5.7.3",
@@ -72,7 +73,7 @@
             "start:all": "./start-all-services.sh",
             "start:frontend": "vite",
             "start:backend": "cd backend && npm run dev",
-    "start:services": "concurrently \"npm run start:frontend\" \"npm run start:backend\" --names \"frontend,backend\" --prefix-colors \"blue,green\"",
+            "start:services": "concurrently \"npm run start:frontend\" \"npm run start:backend\" --names \"frontend,backend\" --prefix-colors \"blue,green\"",
             "check:ports": "lsof -i -P | grep LISTEN | grep -E ':(3000|3001|8000|6379|5432)'",
             "stop:all": "lsof -ti :3000,:3001,:8000 | xargs kill -9 2>/dev/null || true"
       }

@@ -9,17 +9,13 @@ const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const compression_1 = __importDefault(require("compression"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
-const passport_1 = __importDefault(require("passport"));
-const express_session_1 = __importDefault(require("express-session"));
 const env_1 = require("@/config/env");
 const logger_1 = require("@/config/logger");
 const database_1 = require("@/config/database");
 const redis_1 = require("@/config/redis");
 const error_1 = require("@/middleware/error");
-const oauth_1 = require("@/config/oauth");
 const sentry_simple_1 = require("@/config/sentry-simple");
 const swagger_1 = require("@/config/swagger");
-const auth_1 = __importDefault(require("@/routes/auth"));
 const places_1 = __importDefault(require("@/routes/places"));
 const routes_1 = __importDefault(require("@/routes/routes"));
 const users_1 = __importDefault(require("@/routes/users"));
@@ -84,18 +80,6 @@ const limiter = (0, express_rate_limit_1.default)({
     },
 });
 app.use(limiter);
-app.use((0, express_session_1.default)({
-    secret: process.env.SESSION_SECRET || 'pathfinder-session-secret',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        secure: env_1.config.node.env === 'production',
-        maxAge: 24 * 60 * 60 * 1000,
-    },
-}));
-app.use(passport_1.default.initialize());
-app.use(passport_1.default.session());
-(0, oauth_1.initializeOAuth)();
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ extended: true, limit: '10mb' }));
 app.use((req, _res, next) => {
@@ -115,7 +99,6 @@ app.get('/health', (_req, res) => {
         environment: env_1.config.node.env,
     });
 });
-app.use('/api/v1/auth', auth_1.default);
 app.use('/api/v1/places', places_1.default);
 app.use('/api/v1/routes', routes_1.default);
 app.use('/api/v1/users', users_1.default);
@@ -127,7 +110,6 @@ app.get('/api/v1', (_req, res) => {
         version: '1.0.0',
         description: 'Navigation and location services API',
         endpoints: {
-            auth: '/api/v1/auth',
             places: '/api/v1/places',
             routes: '/api/v1/routes',
             users: '/api/v1/users',

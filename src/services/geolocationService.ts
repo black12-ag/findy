@@ -107,9 +107,38 @@ class GeolocationService {
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,
+          timeout: 15000, // Longer timeout for permission request
           maximumAge: 60000
         }
+      );
+    });
+  }
+
+  /**
+   * Force get fresh current position, ignoring cache
+   */
+  async getFreshCurrentPosition(options: GeolocationOptions = {}): Promise<GeolocationPosition> {
+    if (!this.isSupported()) {
+      throw new Error('Geolocation is not supported');
+    }
+
+    const geoOptions: PositionOptions = {
+      enableHighAccuracy: options.enableHighAccuracy ?? true,
+      timeout: options.timeout ?? 20000, // Extra long timeout for fresh position
+      maximumAge: 0 // Force fresh position
+    };
+
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const convertedPosition = this.convertPosition(position);
+          this.lastKnownPosition = convertedPosition;
+          resolve(convertedPosition);
+        },
+        (error) => {
+          reject(this.createLocationError(error));
+        },
+        geoOptions
       );
     });
   }
@@ -131,8 +160,8 @@ class GeolocationService {
     }
 
     const geoOptions: PositionOptions = {
-      enableHighAccuracy: options.enableHighAccuracy ?? false, // Default to false for better reliability
-      timeout: options.timeout ?? 8000, // Shorter default timeout
+      enableHighAccuracy: options.enableHighAccuracy ?? true, // Enable high accuracy by default
+      timeout: options.timeout ?? 15000, // Longer timeout to allow GPS to work
       maximumAge: options.maximumAge ?? 300000 // 5 minutes default
     };
 
@@ -153,13 +182,13 @@ class GeolocationService {
             }
           }
           
-          // If in development mode and no last known position, provide a sane default (San Francisco)
+          // If in development mode and no last known position, provide a sane default (Addis Ababa, Ethiopia)
           if (import.meta.env?.DEV && error.code === error.TIMEOUT) {
             const defaultPosition: GeolocationPosition = {
-              lat: 37.7749,
-              lng: -122.4194,
+              lat: 9.0320,
+              lng: 38.7469,
               accuracy: 1000,
-              altitude: 0,
+              altitude: 2355, // Addis Ababa elevation
               altitudeAccuracy: undefined,
               heading: undefined,
               speed: undefined,
@@ -467,7 +496,8 @@ export const useGeolocation = (options: GeolocationOptions = {}) => {
     calculateDistance: geolocationService.calculateDistance,
     calculateBearing: geolocationService.calculateBearing,
     isAccurateEnoughForNavigation: geolocationService.isAccurateEnoughForNavigation,
-    getAccuracyStatus: geolocationService.getAccuracyStatus
+    getAccuracyStatus: geolocationService.getAccuracyStatus,
+    getFreshCurrentPosition: geolocationService.getFreshCurrentPosition
   };
 };
 

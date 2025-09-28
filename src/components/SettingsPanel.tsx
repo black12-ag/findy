@@ -33,6 +33,7 @@ import { Badge } from './ui/badge';
 import { useUser } from '../contexts/UserContext';
 import { logger } from '../utils/logger';
 import { ThemeToggle } from './ThemeToggle';
+import { toast } from 'sonner';
 
 interface SettingsPanelProps {
   onBack: () => void;
@@ -44,9 +45,10 @@ interface SettingsPanelProps {
   onNavigateToPushSettings?: () => void;
   onNavigateToDeviceTest?: () => void;
   onNavigateToCrashReports?: () => void;
+  onNavigateToOfflineMaps?: () => void;
 }
 
-export function SettingsPanel({ onBack, onNavigateToIntegrations, onNavigateToFleet, onNavigateToAPIDocs, onNavigateToORSConfig, onNavigateToDeveloper, onNavigateToPushSettings, onNavigateToDeviceTest, onNavigateToCrashReports }: SettingsPanelProps) {
+export function SettingsPanel({ onBack, onNavigateToIntegrations, onNavigateToFleet, onNavigateToAPIDocs, onNavigateToORSConfig, onNavigateToDeveloper, onNavigateToPushSettings, onNavigateToDeviceTest, onNavigateToCrashReports, onNavigateToOfflineMaps }: SettingsPanelProps) {
   const { preferences, updatePreference, updatePreferences } = useUser();
   const [currentView, setCurrentView] = useState<'main' | 'voice' | 'accessibility'>('main');
   
@@ -111,6 +113,7 @@ export function SettingsPanel({ onBack, onNavigateToIntegrations, onNavigateToFl
         { id: 'nav-prefs', icon: Navigation, label: 'Navigation Preferences', description: 'Default transport mode, voice settings' },
         { id: 'route-options', icon: Route, label: 'Route Options', description: 'Avoid tolls, highways, and more' },
         { id: 'voice', icon: Volume2, label: 'Voice & Audio', description: 'Voice guidance and audio alerts', onClick: () => setCurrentView('voice') },
+        { id: 'offline-maps', icon: Download, label: 'Offline Maps', description: 'Download maps for offline use', onClick: onNavigateToOfflineMaps },
       ]
     },
     {

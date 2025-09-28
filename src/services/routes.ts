@@ -1,6 +1,6 @@
 import { get, post, del, patch } from '../lib/api';
 import { logger } from '../utils/logger';
-import { directionsService } from './directionsService';
+import directionsService from './directionsService';
 import type { 
   Route, 
   RouteCalculationRequest, 

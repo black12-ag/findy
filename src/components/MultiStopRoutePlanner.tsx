@@ -20,9 +20,8 @@ import { Card } from './ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Switch } from './ui/switch';
 import { Badge } from './ui/badge';
-import { directionsService } from '../services/directionsService';
-import { geocodingService } from '../services/geocodingService';
-import { ORSDirectionsService, setORSApiKey } from '../services/googleUnifiedService';
+import directionsService from '../services/directionsService';
+import googleMapsService from '../services/googleMapsService';
 import tspSolver, { TSPLocation, TSPConstraints, TSPOptimizationOptions } from '../services/tspSolver';
 
 interface Location {
@@ -76,7 +75,7 @@ export function MultiStopRoutePlanner({ onRouteCalculated, onBack }: MultiStopRo
   const [isSearching, setIsSearching] = useState(false);
   const [searchQueries, setSearchQueries] = useState<{[key: string]: string}>({});
   
-  // Search for locations using real geocoding service
+  // Search for locations using Google Maps Places API
   const searchLocations = async (query: string, stopId: string) => {
     if (query.length < 2) {
       setSearchResults([]);
@@ -85,13 +84,13 @@ export function MultiStopRoutePlanner({ onRouteCalculated, onBack }: MultiStopRo
     
     setIsSearching(true);
     try {
-      const results = await geocodingService.searchPlaces(query, { size: 8 });
-      const locations: Location[] = results.map(result => ({
-        id: result.id,
-        name: result.name,
-        address: result.address,
-        lat: result.lat,
-        lng: result.lng
+      const results = await googleMapsService.searchPlaces({ query, limit: 8 });
+      const locations: Location[] = results.map((result: any) => ({
+        id: result.place_id || Date.now().toString(),
+        name: result.name || result.formatted_address,
+        address: result.formatted_address || result.vicinity,
+        lat: result.geometry?.location?.lat() || 0,
+        lng: result.geometry?.location?.lng() || 0
       }));
       setSearchResults(locations);
     } catch (error) {
